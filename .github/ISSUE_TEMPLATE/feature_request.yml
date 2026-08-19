@@ -1,0 +1,20 @@
+name: 💡 Feature request
+description: Suggest an idea or improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation where you missed this feature.
+      placeholder: 'I keep cash in three currencies and want to see the total in my base currency...'
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: How do you see it working?
+      description: Describe the desired behavior. Sketches and examples from other apps are welcome.
+    validations:
+      required: true

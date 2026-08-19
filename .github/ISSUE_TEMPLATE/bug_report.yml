@@ -1,0 +1,46 @@
+name: 🐞 Bug report
+description: Something in the app works incorrectly
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected to see instead.
+      placeholder: "I added a 12 USD expense on my BYN card and the 'can spend today' number didn't update..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Tap ...
+        3. See ...
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Device and iOS version
+      placeholder: 'iPhone 14, iOS 26.0'
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: App version
+      description: Settings → About
+      placeholder: '1.0.0'
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots / extra context
+      description: Amounts, currencies and account setup involved help reproduce money/rate bugs a lot.

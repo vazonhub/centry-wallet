@@ -36,28 +36,34 @@ Centry — офлайновое приложение для учёта личн�
 приватность и построили приложение так, чтобы ваши данные оставались у вас.
 
 ## Какие данные мы собираем
+
 Никакие. Centry не собирает, не передаёт и не хранит на серверах ваши
 персональные или финансовые данные. Все записи (счета, транзакции, категории,
 настройки) хранятся только локально на вашем устройстве.
 
 ## Сетевые обращения
+
 Единственное сетевое обращение приложения — получение актуальных курсов валют
 из публичного сервиса курсов. При этом передаются только коды валют
 (например, USD, BYN, EUR). Ваши суммы, транзакции и любые персональные данные
 при этом не передаются.
 
 ## Хранение и удаление
+
 Данные хранятся на устройстве. Вы можете удалить все данные в любой момент
 через «Настройки → Данные → Удалить все данные», а также удалив приложение.
 
 ## Дети
+
 Приложение не предназначено для сбора данных детей и не собирает данные вообще.
 
 ## Изменения
+
 При изменении практик обработки данных (например, добавлении облачной
 синхронизации) мы обновим эту политику и дату вступления в силу.
 
 ## Контакты
+
 По вопросам приватности: [email].
 
 ---
@@ -70,28 +76,34 @@ Centry is an offline personal finance app. We respect your privacy and built
 the app so your data stays with you.
 
 ## Data we collect
+
 None. Centry does not collect, transmit, or store your personal or financial
 data on any server. All records (accounts, transactions, categories, settings)
 are stored only locally on your device.
 
 ## Network access
+
 The app's only network request fetches current currency exchange rates from a
 public rates service. Only currency codes (e.g. USD, BYN, EUR) are sent. Your
 amounts, transactions, and any personal data are never transmitted.
 
 ## Storage and deletion
+
 Data is stored on your device. You can delete all data at any time via
 "Settings → Data → Delete all data", or by deleting the app.
 
 ## Children
+
 The app is not intended to collect children's data and does not collect any
 data at all.
 
 ## Changes
+
 If our data practices change (e.g. adding cloud sync), we will update this
 policy and the effective date.
 
 ## Contact
+
 Privacy questions: [email].
 ```
 

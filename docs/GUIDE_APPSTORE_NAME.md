@@ -1,8 +1,10 @@
 # Гайд владельца: резервация имени в App Store Connect (пункт 22, D17)
 
-Цель — застолбить имя **Centry: деньги и валюты** до v1.0. Делается один раз. Нужен активный Apple Developer Program (у тебя есть).
+> ✅ **Сделано (2026-08-20).** Имя выбрано — просто **`Centry`** (без дескриптора, решение B16). Запись создана, `ascAppId = 6803400593`, App Group `group.by.vazon.centry` привязан к `by.vazon.centry` и `by.vazon.centry.widget` (B17). `ascAppId` вписан в `eas.json`. Гайд ниже оставлен для истории/воспроизведения.
 
-> Имя приложения в App Store ≤ 30 символов. «Centry: деньги и валюты» = 23 символа — ок.
+Цель — застолбить имя **Centry** до v1.0. Делается один раз. Нужен активный Apple Developer Program (у тебя есть).
+
+> Имя приложения в App Store ≤ 30 символов. «Centry» = 6 символов — ок.
 
 ## Шаг 0. Зарегистрировать App ID и App Group (Certificates, IDs & Profiles)
 
@@ -22,7 +24,7 @@ developer.apple.com → Certificates, Identifiers & Profiles → **Identifiers**
 appstoreconnect.apple.com → **My Apps** → **+** → **New App**:
 
 - Platforms: **iOS**.
-- Name: **`Centry: деньги и валюты`**.
+- Name: **`Centry`**.
 - Primary Language: **Russian**.
 - Bundle ID: выбрать `by.vazon.centry` (появится из шага 0).
 - SKU: любой уникальный, например `centry-ios-001`.
@@ -41,5 +43,5 @@ appstoreconnect.apple.com → **My Apps** → **+** → **New App**:
 
 ## Что прислать мне после гайда
 
-- [ ] `ascAppId` (число из шага 2);
-- [ ] подтверждение, что App Group `group.by.vazon.centry` привязан к обоим App ID.
+- [x] `ascAppId` — **6803400593** (вписан в `eas.json`);
+- [x] App Group `group.by.vazon.centry` привязан к обоим App ID (`by.vazon.centry`, `by.vazon.centry.widget`).

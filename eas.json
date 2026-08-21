@@ -1,0 +1,39 @@
+{
+  "cli": {
+    "version": ">= 16.28.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal"
+    },
+    "testing": {
+      "environment": "production",
+      "ios": {
+        "image": "macos-tahoe-26.5-xcode-26.6"
+      }
+    },
+    "production": {
+      "environment": "production",
+      "ios": {
+        "image": "macos-tahoe-26.5-xcode-26.6"
+      }
+    }
+  },
+  "submit": {
+    "testing": {
+      "ios": {
+        "ascAppId": "6803400593"
+      }
+    },
+    "production": {
+      "ios": {
+        "ascAppId": "6803400593"
+      }
+    }
+  }
+}

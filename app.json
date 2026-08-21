@@ -1,0 +1,60 @@
+{
+  "expo": {
+    "name": "Centry",
+    "slug": "centry-wallet",
+    "scheme": "centry",
+    "orientation": "portrait",
+    "icon": "./assets/logo-light-theme.png",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "by.vazon.centry",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "CFBundleLocalizations": ["ru", "en"],
+        "AppGroup": "group.by.vazon.centry"
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": ["group.by.vazon.centry"]
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/logo-light-theme.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#faf3e4",
+          "dark": {
+            "image": "./assets/logo-night-theme.png",
+            "backgroundColor": "#000e49"
+          }
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ],
+      "expo-notifications",
+      "expo-sqlite",
+      "@bacons/apple-targets"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "95fe917d-a9ca-4366-99c3-7175a59e86ca"
+      },
+      "router": {}
+    }
+  }
+}

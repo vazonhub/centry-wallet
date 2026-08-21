@@ -4,17 +4,17 @@ Build 0 — **личная сборка**, дедлайн 2 недели, ста
 
 ## План работ
 
-| Этап | Содержание | Ключевые артефакты |
-| --- | --- | --- |
-| 1 | Каркас проекта, SQLite, миграции, модели, **денежный модуль + тесты на арифметику** | `src/db/`, `src/models/`, `@utils/money` + `__tests__` |
-| 2 | **Шит ввода** — тот самый, за 4 секунды | `src/views/input/`, `AddTransactionIntent` (TS-часть) |
-| 3 | Главная: герой, чипсы счетов, лента | `src/views/home/` |
-| 4 | Счета, создание на лету при вводе чужой валюты | `src/views/accounts/`, контроллер счетов |
-| 5 | История: месяцы, итоги, фильтры, поиск, разбивка, шит деталей | `src/views/history/` |
-| 6 | Настройки, темы | `src/views/settings/`, `usePalette`, resolved-scheme |
-| 7 | **AddTransactionIntent + виджеты S и M + снимок в App Group** | `targets/widget/`, `plugins/withWidget.js`, `src/services/widget/` |
-| 8 | Siri/Shortcuts, вечернее напоминание | `plugins/withAppIntents.js`, `src/services/notifications/` |
-| 9 | Пустые состояния, полировка, багфикс, установка на телефон | — |
+| Этап | Содержание                                                                          | Ключевые артефакты                                                 |
+| ---- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| 1    | Каркас проекта, SQLite, миграции, модели, **денежный модуль + тесты на арифметику** | `src/db/`, `src/models/`, `@utils/money` + `__tests__`             |
+| 2    | **Шит ввода** — тот самый, за 4 секунды                                             | `src/views/input/`, `AddTransactionIntent` (TS-часть)              |
+| 3    | Главная: герой, чипсы счетов, лента                                                 | `src/views/home/`                                                  |
+| 4    | Счета, создание на лету при вводе чужой валюты                                      | `src/views/accounts/`, контроллер счетов                           |
+| 5    | История: месяцы, итоги, фильтры, поиск, разбивка, шит деталей                       | `src/views/history/`                                               |
+| 6    | Настройки, темы                                                                     | `src/views/settings/`, `usePalette`, resolved-scheme               |
+| 7    | **AddTransactionIntent + виджеты S и M + снимок в App Group**                       | `targets/widget/`, `plugins/withWidget.js`, `src/services/widget/` |
+| 8    | Siri/Shortcuts, вечернее напоминание                                                | `plugins/withAppIntents.js`, `src/services/notifications/`         |
+| 9    | Пустые состояния, полировка, багфикс, установка на телефон                          | —                                                                  |
 
 Порядок ядра ввода внутри этапов 2/7/8: **интент → экран ввода → виджеты → Siri → вечерний пуш** (см. [UX_SPEC](UX_SPEC.md#ядро-ввода)).
 

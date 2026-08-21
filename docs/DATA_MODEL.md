@@ -4,11 +4,11 @@
 
 ## Разделение ответственности
 
-| Что | Где | Почему |
-| --- | --- | --- |
-| Транзакции, счета, категории | **SQLite** (`expo-sqlite`) | источник истины |
-| Настройки | **MMKV** (`react-native-mmkv`) | быстрый key-value |
-| Снимок для виджета | **MMKV в App Group** `group.by.vazon.centry` | доступен из Swift-виджета |
+| Что                          | Где                                          | Почему                    |
+| ---------------------------- | -------------------------------------------- | ------------------------- |
+| Транзакции, счета, категории | **SQLite** (`expo-sqlite`)                   | источник истины           |
+| Настройки                    | **MMKV** (`react-native-mmkv`)               | быстрый key-value         |
+| Снимок для виджета           | **MMKV в App Group** `group.by.vazon.centry` | доступен из Swift-виджета |
 
 MMKV хранит только настройки и производные значения, пересчитываемые из SQLite. **Потеря MMKV не теряет данные.**
 
@@ -137,8 +137,8 @@ rates_manual_json    '{"USD":3300000}'                     // ручные пе�
   "currency": "BYN",
   "daysLeft": 13,
   "todaySpentMinor": 1820,
-  "accounts": [{"name": "Карта BYN", "balanceMinor": 34020, "currency": "BYN"}],
-  "recent": [{"icon": "🍔", "note": "Обед", "amountMinor": -1200, "currency": "BYN"}],
+  "accounts": [{ "name": "Карта BYN", "balanceMinor": 34020, "currency": "BYN" }],
+  "recent": [{ "icon": "🍔", "note": "Обед", "amountMinor": -1200, "currency": "BYN" }],
   "updatedAt": 1786000000
 }
 ```

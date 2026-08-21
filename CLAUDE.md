@@ -10,16 +10,16 @@
 
 ## Вольт проекта (docs/)
 
-| Документ | О чём |
-| --- | --- |
-| [PROJECT_BRIEF](docs/PROJECT_BRIEF.md) | канонический продукт: цель, пользователь, незыблемые правила, скоуп |
-| [ARCHITECTURE](docs/ARCHITECTURE.md) | иерархия папок, слои MVC+, идиомы из Bsuir, набор зависимостей |
-| [DATA_MODEL](docs/DATA_MODEL.md) | схема SQLite, миграции, ключи MMKV, снимок виджета, денежный модуль, тесты |
-| [DESIGN_SYSTEM](docs/DESIGN_SYSTEM.md) | Liquid Glass токены (светлая/тёмная), типографика, правила блюра |
-| [UX_SPEC](docs/UX_SPEC.md) | экраны, ядро ввода, онбординг, стартовые данные, пустые состояния |
-| [BUILD0_PLAN](docs/BUILD0_PLAN.md) | план из 9 этапов + критерии приёмки |
-| [CICD](docs/CICD.md) | gitflow, CI, EAS (off до v1.0), env-процесс, версионирование |
-| [DECISIONS](docs/DECISIONS.md) | реестр решений D1–D30 + B1–B15 (включая правки владельца от 2026-08-19) |
+| Документ                               | О чём                                                                      |
+| -------------------------------------- | -------------------------------------------------------------------------- |
+| [PROJECT_BRIEF](docs/PROJECT_BRIEF.md) | канонический продукт: цель, пользователь, незыблемые правила, скоуп        |
+| [ARCHITECTURE](docs/ARCHITECTURE.md)   | иерархия папок, слои MVC+, идиомы из Bsuir, набор зависимостей             |
+| [DATA_MODEL](docs/DATA_MODEL.md)       | схема SQLite, миграции, ключи MMKV, снимок виджета, денежный модуль, тесты |
+| [DESIGN_SYSTEM](docs/DESIGN_SYSTEM.md) | Liquid Glass токены (светлая/тёмная), типографика, правила блюра           |
+| [UX_SPEC](docs/UX_SPEC.md)             | экраны, ядро ввода, онбординг, стартовые данные, пустые состояния          |
+| [BUILD0_PLAN](docs/BUILD0_PLAN.md)     | план из 9 этапов + критерии приёмки                                        |
+| [CICD](docs/CICD.md)                   | gitflow, CI, EAS (off до v1.0), env-процесс, версионирование               |
+| [DECISIONS](docs/DECISIONS.md)         | реестр решений D1–D30 + B1–B17 (включая правки владельца от 2026-08-19/20) |
 
 Гайды владельца (ручные шаги вне кода): [GUIDE_APPSTORE_NAME](docs/GUIDE_APPSTORE_NAME.md) · [GUIDE_EAS_SETUP](docs/GUIDE_EAS_SETUP.md) · [GUIDE_PRIVACY](docs/GUIDE_PRIVACY.md). Что ждём от владельца — [WHAT_I_NEED_FROM_YOU](WHAT_I_NEED_FROM_YOU.md).
 
@@ -84,7 +84,31 @@ Pre-commit (husky + lint-staged) гоняет prettier + `eslint --fix` на sta
 
 ## Статус
 
-**Стадия: бутстрап.** Вольт написан, код-скелет ещё не создан. Следующий шаг — этап 1 плана ([BUILD0_PLAN](docs/BUILD0_PLAN.md)): каркас, SQLite, миграции, денежный модуль + тесты. Что нужно от владельца — [`WHAT_I_NEED_FROM_YOU.md`](WHAT_I_NEED_FROM_YOU.md).
+**Стадия: этапы 1–9 написаны (2026-08-21); приложение запускается на симуляторе, вечерний пуш работает, виджет ждёт девайса, Siri отключён (краш, см. этап 8).** 69 тестов зелёные, `npm run typecheck`/`lint` чисты, `expo prebuild --clean` + `pod install` проходят, EAS ad-hoc ставится (`ascAppId 6803400593`).
+
+> Сборочные блокеры виджета устранены (2026-08-21): `import MMKVAppExtension` + `pod 'MMKVAppExtension', :modular_headers => true` в `targets/widget/pods.rb` (под — статичный Obj-C++ без modulemap, без него Swift не видит модуль); `ios.appleTeamId` проведён через `.env` (`APPLE_TEAM_ID`) → `app.config.ts`.
+
+Этап 1: конфиги (Expo SDK 54, aliases, eslint/prettier/jest), `src/db` (SQLite + миграции + репозитории), `src/models`, денежный модуль `@utils/money` (BigInt, half-up away-from-zero), токены `@theme` (Liquid Glass; canvas light `#faf3e4` / dark `#000e49`, B20), `@storage` (MMKV), сид 8+3 категорий и счёта «Основной».
+
+Этап 2 (ядро ввода): сторы `settings`/`data`/`ui` (Zustand + MMKV), **единственный сетевой модуль** `src/services/rates/` (Fawaz, только коды валют, таймаут, оффлайн-фолбэк), контроллеры `data`/`transactions` (единые funnel'ы `addTransaction`/`addTransfer`/`createAccount`), шит ввода `@views/input`: расход/доход/**перевод** (B12, кросс-валютный с редактируемым итогом) + **создание счёта на лету** (D7). Bootstrap не блокируется сетью (иначе был белый экран).
+
+Этап 3 (главная): «можно сегодня» с порогами B9, **carry-over плашка** (B10), чипсы счетов, лента с **группировкой по дням** и итогом дня, **день зарплаты по тапу на цифру** (rule 3), FAB «+».
+
+Навигация: **нативный таб-бар из 3 вкладок** `История · Главная · Настройки` (Главная по центру/дефолтная, B19), «+» — плавающая кнопка на Главной. Каждая вкладка — свой Stack-layout.
+
+Этап 5 (История): переключение месяцев, итоги пришло/ушло/разница, живой поиск по заметке, фильтры (Все/Расходы/Доходы/по счетам), топ-5 «на что ушло» полосами (D19), лента на `@shopify/flash-list` с группировкой по дням, **шит деталей** (D20): курс/сумма в базе, смена категории и заметки, удаление.
+
+Этап 6 (Настройки): счета+балансы и добавление счёта, базовая валюта, день зарплаты, **переключение темы** (`resolvedScheme` в сторе, паттерн Bsuir — `usePalette` читает его, не `useColorScheme`), тумблеры ввода, «удалить все данные» (единственный hard-delete, `wipeAllData`+реseed), «о приложении».
+
+Этап 7 (виджеты): **код готов (2026-08-20), ждёт сборки на устройстве.** TS-снимок «можно сегодня» (`src/services/widget/`, единый расчёт `computeAllowance` — не дублируется в Swift) пишется в App-Group MMKV (`centry.widget`) после каждой мутации (хук в `DataController.loadAll`) + `reloadAllTimelines()`. Нативный таргет — через **`@bacons/apple-targets`** (не самописный плагин): `targets/widget/` (Swift S/M-виджеты, читают снимок из App-Group MMKV через `MMKVAppExtension`) + `expo-target.config.js` + `pods.rb`. Deep link `centry://add` → шит ввода. `expo prebuild` проверен: таргет `by.vazon.centry.widget` генерируется. Подпись таргета — через `APPLE_TEAM_ID` в `.env` (см. блок «Сборочные блокеры» выше).
+
+Этап 8 (Siri + вечерний пуш): **вечерний пуш готов и работает на симуляторе**; **Siri / App Intents — ОТКЛЮЧЕН** (см. ниже). Пуш — единственный локальный (не сетевой) сервис `src/services/notifications/` (ежедневный `SchedulableTriggerInputTypes.DAILY` в `eveningPushTime`, идемпотентный `syncEveningReminder`, хук в `bootstrap` + тумблер/таймер в «Настройки → Ввод»), тап → `centry://add` → шит ввода (`useNotificationResponse`).
+
+> ⚠️ **Siri / App Intents отключён (2026-08-21):** плагин `plugins/withAppIntents/` линковал `MMKVAppExtension` во **второй** раз — в main-таргет (виджет уже линкует его как extension), а main уже тянет тот же `MMKVCore` через `react-native-mmkv`. Два потребителя одного `MMKVCore` в одном процессе → **порча кучи на старте** (`nanov2_guard_corruption_detected`, краш в Hermes). Плагин убран из `app.json`, `centry.intent` вернулся в single-process. JS-часть (`src/services/intents/`, `usePendingIntent`, `openInputSheet(prefill)`, Swift-шаблоны в `plugins/withAppIntents/swift/`) сохранена и бездействует. Безопасный канал Swift→JS (без второго потребителя `MMKVCore`) — открытый вопрос для будущего захода (варианты: App-Group `UserDefaults` + мини нативный ридер; либо интент только открывает приложение без параметров).
+
+Этап 9 (полировка): пустые состояния подтверждены на всех экранах (лента Главной, список Истории, list-экраны настроек деградируют через «＋ Добавить»); CSV-экспорт — кнопка-заглушка (Alert), убрана мёртвая строка «Синхронизация».
+
+Осталось (владелец): **сборка на устройстве** — `APPLE_TEAM_ID` в `.env` → `npm run prebuild` → Xcode → Run; проверить виджет и вечерний пуш на девайсе (нужен, скорее всего, платный Apple Developer). Siri — отдельный будущий заход (безопасный канал). Что нужно от владельца — [`WHAT_I_NEED_FROM_YOU.md`](WHAT_I_NEED_FROM_YOU.md).
 
 ## Code style (как в Bsuir)
 

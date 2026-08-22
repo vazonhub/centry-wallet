@@ -5,6 +5,7 @@ import {
   BottomSheetBackdrop,
   BottomSheetModal,
   BottomSheetScrollView,
+  BottomSheetTextInput,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
 
@@ -23,7 +24,14 @@ import type { Palette } from '@theme';
 import { Radius, Spacing, Typography } from '@theme';
 import { currentTzOffsetMin } from '@utils/date';
 import { hapticLight } from '@utils/haptics';
-import { convertToBase, localDay, minorToAmountInput, parseAmountToMinor } from '@utils/money';
+import {
+  amountPlaceholder,
+  convertToBase,
+  localDay,
+  minorToAmountInput,
+  parseAmountToMinor,
+  sanitizeAmountInput,
+} from '@utils/money';
 
 const WHITE = '#ffffff'; // white text on the saturated red delete button (both themes)
 
@@ -53,10 +61,13 @@ export function TransactionDetailSheet() {
   const base = useSettingsStore((s) => s.baseCurrency);
 
   const [tx, setTx] = useState<Transaction | null>(null);
+  // Editable amount text (magnitude in the tx's own currency), seeded on open.
+  const [amountText, setAmountText] = useState('');
   const onChangedRef = useRef<(() => void) | undefined>(undefined);
 
   const open = useCallback((next: Transaction, onChanged?: () => void) => {
     setTx(next);
+    setAmountText(minorToAmountInput(Math.abs(next.amountMinor), next.currency));
     onChangedRef.current = onChanged;
     sheetRef.current?.present();
     hapticLight();
@@ -92,26 +103,25 @@ export function TransactionDetailSheet() {
     [tx],
   );
 
-  const onEditAmount = useCallback(() => {
+  // Commit the edited amount (on blur / done). Same numeric input as creation,
+  // pre-filled with the current value. Keeps the sign from the kind; restores the
+  // field on invalid/empty input. Not for transfers.
+  const commitAmount = useCallback(async () => {
     if (!tx || tx.kind === 'transfer') return;
     const current = tx;
     const kind = current.kind === 'income' ? 'income' : 'expense';
-    Alert.prompt(
-      'Сумма',
-      'Исправьте сумму, если ввели не то число.',
-      async (value?: string) => {
-        const abs = parseAmountToMinor(value ?? '', current.currency);
-        if (abs == null || abs <= 0) return;
-        await TransactionsController.editTransactionAmount(current.id, abs, kind);
-        setTx({ ...current, amountMinor: kind === 'income' ? abs : -abs });
-        onChangedRef.current?.();
-        hapticLight();
-      },
-      'plain-text',
-      minorToAmountInput(Math.abs(current.amountMinor), current.currency),
-      'decimal-pad',
-    );
-  }, [tx]);
+    const abs = parseAmountToMinor(amountText, current.currency);
+    if (abs == null || abs <= 0) {
+      setAmountText(minorToAmountInput(Math.abs(current.amountMinor), current.currency));
+      return;
+    }
+    const signed = kind === 'income' ? abs : -abs;
+    if (signed === current.amountMinor) return;
+    await TransactionsController.editTransactionAmount(current.id, abs, kind);
+    setTx({ ...current, amountMinor: signed });
+    onChangedRef.current?.();
+    hapticLight();
+  }, [tx, amountText]);
 
   const onEditNote = useCallback(() => {
     if (!tx) return;
@@ -162,6 +172,8 @@ export function TransactionDetailSheet() {
       snapPoints={['60%']}
       enableDynamicSizing={false}
       enablePanDownToClose
+      keyboardBehavior="interactive"
+      keyboardBlurBehavior="restore"
       backdropComponent={renderBackdrop}
       backgroundStyle={styles.sheetBg}
       handleIndicatorStyle={styles.handle}
@@ -178,18 +190,35 @@ export function TransactionDetailSheet() {
                 style={[styles.detailAmount, { color: palette.ink }]}
               />
             ) : (
-              <Pressable onPress={onEditAmount} accessibilityRole="button">
-                <Money
-                  minor={tx.amountMinor}
-                  currency={tx.currency}
-                  options={{ showPlus: true }}
-                  style={[
-                    styles.detailAmount,
-                    { color: tx.amountMinor >= 0 ? palette.pos : palette.ink },
-                  ]}
-                />
-                <Text style={styles.editHint}>нажмите, чтобы изменить сумму</Text>
-              </Pressable>
+              <>
+                <View style={styles.amountEditRow}>
+                  <Text
+                    style={[
+                      styles.amountSign,
+                      { color: tx.amountMinor >= 0 ? palette.pos : palette.ink },
+                    ]}
+                  >
+                    {tx.kind === 'income' ? '+' : '−'}
+                  </Text>
+                  <BottomSheetTextInput
+                    style={[
+                      styles.detailAmount,
+                      styles.amountInput,
+                      { color: tx.amountMinor >= 0 ? palette.pos : palette.ink },
+                    ]}
+                    value={amountText}
+                    onChangeText={(t) => setAmountText(sanitizeAmountInput(t, tx.currency))}
+                    keyboardType="decimal-pad"
+                    returnKeyType="done"
+                    placeholder={amountPlaceholder(tx.currency)}
+                    placeholderTextColor={palette.dim2}
+                    onEndEditing={() => void commitAmount()}
+                    onSubmitEditing={() => void commitAmount()}
+                  />
+                  <Text style={styles.amountCurrency}>{tx.currency}</Text>
+                </View>
+                <Text style={styles.editHint}>нажмите на сумму, чтобы изменить</Text>
+              </>
             )}
             <View style={styles.detailRows}>
               <DetailRow
@@ -288,6 +317,16 @@ const makeStyles = (p: Palette) =>
       textAlign: 'center',
       marginTop: 2,
     },
+    amountEditRow: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      justifyContent: 'center',
+      gap: Spacing.xs,
+      marginTop: Spacing.sm,
+    },
+    amountSign: { fontSize: Typography.hero.fontSize, fontWeight: Typography.hero.fontWeight },
+    amountInput: { marginTop: 0, textAlign: 'right', minWidth: 60, paddingVertical: 0 },
+    amountCurrency: { color: p.dim, fontSize: Typography.title.fontSize, fontWeight: '600' },
     detailRows: {
       backgroundColor: p.glassBg,
       borderColor: p.glassBorder,

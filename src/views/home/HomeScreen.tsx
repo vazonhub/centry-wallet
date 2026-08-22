@@ -80,10 +80,14 @@ export function HomeScreen() {
       // how much money actually exists across all accounts (converted to base).
       const remainingPlan = Math.max(0, expectedBaseMinor - periodSpentMinor);
       const available = totalBalanceBaseMinor(accounts, balances, rates, base);
+      // The "запас" is how far ahead of pace you are — but you can't carry more
+      // than the money you actually own, so cap a positive surplus at the total
+      // balance (a deficit stays as is, it's a warning).
+      const carryShown = carryMinor > 0 ? Math.min(carryMinor, Math.max(0, available)) : carryMinor;
       return {
         perDayMinor: budget,
         todaySpent: spent,
-        carry: carryMinor,
+        carry: carryShown,
         heroColor: color,
         configured: isConfigured,
         shortfallMinor: isConfigured ? remainingPlan - available : 0,

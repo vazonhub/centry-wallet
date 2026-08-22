@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -15,12 +15,12 @@ import { useDataStore } from '@stores/data.store';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
 import { numberTextStyle, Radius, Spacing, textProps, Typography } from '@theme';
-import { formatDayMonthWeekday, formatTodayHuman, todayLocalDay } from '@utils/date';
+import { formatTodayHuman, todayLocalDay } from '@utils/date';
 import { hexToRgba } from '@utils/color';
 import { hapticLight } from '@utils/haptics';
 import { convertToBase, formatMoney } from '@utils/money';
-import { nextPaydayDate } from '@utils/schedule';
-import { computeAllowance } from '@utils/summary';
+import { periodLabel } from '@utils/budget';
+import { computeAllowance, totalBalanceBaseMinor } from '@utils/summary';
 
 /** Net change of a day in base minor units (transfers excluded — internal moves). */
 function dayNetBaseMinor(txs: Transaction[]): number {
@@ -49,21 +49,23 @@ export function HomeScreen() {
   const recent = useDataStore((s) => s.recent);
   const categories = useDataStore((s) => s.categories);
   const base = useSettingsStore((s) => s.baseCurrency);
-  const payoutSchedule = useSettingsStore((s) => s.payoutSchedule);
+  const budgetPlan = useSettingsStore((s) => s.budgetPlan);
 
   const categoryById = useMemo(
     () => Object.fromEntries(categories.map((c) => [c.id, c])),
     [categories],
   );
 
-  const { perDayMinor, todaySpent, carry, heroColor, configured } = useMemo(() => {
+  const { perDayMinor, todaySpent, carry, heroColor, configured, shortfallMinor } = useMemo(() => {
     const {
       perDayMinor: budget,
       todaySpentMinor: spent,
       carryMinor,
       configured: isConfigured,
+      expectedBaseMinor,
+      periodSpentMinor,
     } = computeAllowance({
-      schedule: payoutSchedule,
+      plan: budgetPlan,
       recent,
       base,
       rates,
@@ -72,14 +74,32 @@ export function HomeScreen() {
     });
     const usage = budget > 0 ? spent / budget : spent > 0 ? 1 : 0;
     const color = usage < 0.8 ? palette.pos : usage < 1 ? palette.warn : palette.neg;
+    // "Денег может не хватить": what's still planned to be spent this period vs.
+    // how much money actually exists across all accounts (converted to base).
+    const remainingPlan = Math.max(0, expectedBaseMinor - periodSpentMinor);
+    const available = totalBalanceBaseMinor(accounts, balances, rates, base);
     return {
       perDayMinor: budget,
       todaySpent: spent,
       carry: carryMinor,
       heroColor: color,
       configured: isConfigured,
+      shortfallMinor: isConfigured ? remainingPlan - available : 0,
     };
-  }, [payoutSchedule, recent, base, rates, palette]);
+  }, [budgetPlan, recent, base, rates, accounts, balances, palette]);
+
+  const insufficientFunds = configured && shortfallMinor > 0;
+
+  const onWarningPress = useCallback(() => {
+    hapticLight();
+    Alert.alert(
+      'Денег может не хватить',
+      `На ${periodLabel(budgetPlan.period)} по плану осталось потратить ` +
+        `${formatMoney(Math.max(0, shortfallMinor), base)} сверх того, что есть на счетах. ` +
+        'Возможно, стоит уменьшить план бюджета или пополнить счёт.',
+      [{ text: 'Понятно' }],
+    );
+  }, [budgetPlan.period, shortfallMinor, base]);
 
   const days = useMemo(() => {
     const map = new Map<string, Transaction[]>();
@@ -93,7 +113,7 @@ export function HomeScreen() {
     return [...map.entries()];
   }, [recent]);
 
-  // Tapping the hero opens the period settings (payday + expected payout, B21).
+  // Tapping the hero opens the budget-plan settings.
   const onHeroPress = useCallback(() => {
     hapticLight();
     router.push('/(tabs)/(settings)/money' as never);
@@ -109,18 +129,25 @@ export function HomeScreen() {
             <Text {...textProps('caption')} style={styles.todayLine}>
               {formatTodayHuman()}
             </Text>
-            {configured && (
-              <Text {...textProps('caption')} style={styles.nextPay}>
-                выплата {formatDayMonthWeekday(nextPaydayDate(payoutSchedule))}
-              </Text>
-            )}
           </View>
 
           {/* Hero block */}
           <Pressable onPress={onHeroPress} style={styles.hero} accessibilityRole="button">
-            <Text {...textProps('micro')} style={styles.heroLabel}>
-              МОЖНО СЕГОДНЯ
-            </Text>
+            <View style={styles.heroLabelRow}>
+              <Text {...textProps('micro')} style={styles.heroLabel}>
+                МОЖНО СЕГОДНЯ
+              </Text>
+              {insufficientFunds && (
+                <Pressable
+                  onPress={onWarningPress}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="Денег может не хватить на план"
+                >
+                  <AppIcon name="warning" color={palette.warn} size={16} />
+                </Pressable>
+              )}
+            </View>
             {configured ? (
               <Money
                 minor={perDayMinor}
@@ -138,7 +165,7 @@ export function HomeScreen() {
                 </Text>
               ) : (
                 <Text {...textProps('footnote')} style={styles.heroSpent}>
-                  Задайте ожидаемую выплату →
+                  Задайте план бюджета →
                 </Text>
               )}
               {configured && carry !== 0 && (
@@ -297,8 +324,8 @@ const makeStyles = (p: Palette) =>
       paddingHorizontal: Spacing.lg,
     },
     todayLine: { color: p.dim, textTransform: 'capitalize' },
-    nextPay: { color: p.dim2 },
     // Hero
+    heroLabelRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
     hero: {
       backgroundColor: p.glassBg,
       borderColor: p.glassBorder,

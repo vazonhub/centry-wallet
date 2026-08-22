@@ -61,13 +61,7 @@ describe('buildWidgetSnapshot', () => {
       categories: [category({ id: 'c1', icon: '🍔' })],
       base: 'BYN',
       rates: {},
-      schedule: {
-        frequency: 'monthly',
-        weekday: 5,
-        anchor: null,
-        days: [1],
-        amounts: { '1': { minor: 310_00, currency: 'BYN' } },
-      },
+      plan: { period: 'month', amountMinor: 310_00, currency: 'BYN' },
       todayLocalDay: '2026-08-20',
       now,
     });
@@ -94,13 +88,7 @@ describe('buildWidgetSnapshot', () => {
       categories: [category({ id: 'c1', name: 'Еда', icon: '🍔' })],
       base: 'BYN',
       rates: {},
-      schedule: {
-        frequency: 'monthly',
-        weekday: 5,
-        anchor: null,
-        days: [1],
-        amounts: { '1': { minor: 310_00, currency: 'BYN' } },
-      },
+      plan: { period: 'month', amountMinor: 310_00, currency: 'BYN' },
       todayLocalDay: '2026-08-20',
       now,
     });

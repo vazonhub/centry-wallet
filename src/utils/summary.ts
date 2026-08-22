@@ -1,14 +1,7 @@
 import type { Account, Transaction } from '@models';
 
+import { type BudgetPlan, periodBounds } from './budget';
 import { carryOver, convertToBase, perDay } from './money';
-import {
-  daysElapsedInPeriod,
-  daysInPeriod,
-  daysUntilPayday,
-  expectedForPeriod,
-  periodStartLocalDay,
-  type PayoutSchedule,
-} from './schedule';
 
 const E6_ONE = 1_000_000;
 
@@ -66,12 +59,12 @@ export function periodSpentBaseMinor(recent: Transaction[], periodStartLocalDay:
 }
 
 export interface AllowanceInput {
-  /** Recurring payout schedule (B21). Drives the period and its expected amount. */
-  schedule: PayoutSchedule;
+  /** Planned spend for the current period (calendar week/month). */
+  plan: BudgetPlan;
   recent: Transaction[];
-  /** Base currency code (the payout slot's amount is converted into it). */
+  /** Base currency code (the plan amount is converted into it). */
   base: string;
-  /** currency → rate to base ×1e6, to convert a foreign payout to base. */
+  /** currency → rate to base ×1e6, to convert a foreign plan amount to base. */
   rates: Record<string, number>;
   /** Today's local day 'YYYY-MM-DD' (device timezone at call time). */
   todayLocalDay: string;
@@ -81,50 +74,60 @@ export interface AllowanceInput {
 
 /** Everything the "можно сегодня" hero (and the widget snapshot) needs. */
 export interface Allowance {
-  /** Daily budget = expected payout ÷ days in the period. */
+  /** Daily budget = planned spend ÷ days in the period. */
   perDayMinor: number;
   /** Base-minor spent today (expenses only). */
   todaySpentMinor: number;
   /** Period surplus (+) / deficit (−) in base minor units (B10). */
   carryMinor: number;
-  /** Whole days until the next payday (≥ 1). */
+  /** Whole days remaining in the period including today (≥ 1). */
   daysLeft: number;
   /** Whole days in the current period. */
   daysInPeriod: number;
-  /** False until an expected payout has been set (onboarding / regular income). */
+  /** The whole planned spend for the period, in base minor units. */
+  expectedBaseMinor: number;
+  /** Base-minor already spent this period (expenses only). */
+  periodSpentMinor: number;
+  /** First day of the current period, 'YYYY-MM-DD' (local). */
+  periodStartLocalDay: string;
+  /** False until a positive plan amount has been set. */
   configured: boolean;
 }
 
 /**
  * The single source of the home "можно сегодня" math, shared by the home screen
  * and the WidgetKit snapshot so the two can never drift (the widget must never
- * recompute this in Swift — docs/DATA_MODEL.md#снимок-для-виджета). Linear model
- * (B21): the expected payout is spread evenly across the period; the carry-over
- * plate tracks deviation from that pace. Account balances do NOT feed the limit.
+ * recompute this in Swift — docs/DATA_MODEL.md#снимок-для-виджета). Linear model:
+ * the planned period spend is spread evenly across the calendar period; the
+ * carry-over plate tracks deviation from that pace. The plan is a standalone
+ * budget — incomes/expenses never change it, and account balances do NOT feed
+ * the daily number (only the separate "денег может не хватить" warning).
  */
 export function computeAllowance(i: AllowanceInput): Allowance {
-  const daysLeft = daysUntilPayday(i.schedule, i.now);
-  const totalDays = daysInPeriod(i.schedule, i.now);
+  const bounds = periodBounds(i.plan.period, i.now);
 
-  // Expected payout is stored in the slot's own currency; convert to base.
-  const expected = expectedForPeriod(i.schedule, i.now);
-  const expectedBaseMinor = expected
-    ? convertToBase(
-        expected.minor,
-        expected.currency === i.base ? E6_ONE : (i.rates[expected.currency] ?? E6_ONE),
-      )
-    : 0;
+  // The plan amount is entered in its own currency; convert to base.
+  const expectedBaseMinor =
+    i.plan.amountMinor > 0
+      ? convertToBase(
+          i.plan.amountMinor,
+          i.plan.currency === i.base ? E6_ONE : (i.rates[i.plan.currency] ?? E6_ONE),
+        )
+      : 0;
 
-  const perDayMinor = perDay(expectedBaseMinor, totalDays);
+  const perDayMinor = perDay(expectedBaseMinor, bounds.daysInPeriod);
   const todaySpentMinor = todaySpentBaseMinor(i.recent, i.todayLocalDay);
-  const periodSpent = periodSpentBaseMinor(i.recent, periodStartLocalDay(i.schedule, i.now));
-  const carryMinor = carryOver(perDayMinor, daysElapsedInPeriod(i.schedule, i.now), periodSpent);
+  const periodSpentMinor = periodSpentBaseMinor(i.recent, bounds.startLocalDay);
+  const carryMinor = carryOver(perDayMinor, bounds.daysElapsed, periodSpentMinor);
   return {
     perDayMinor,
     todaySpentMinor,
     carryMinor,
-    daysLeft,
-    daysInPeriod: totalDays,
+    daysLeft: bounds.daysLeft,
+    daysInPeriod: bounds.daysInPeriod,
+    expectedBaseMinor,
+    periodSpentMinor,
+    periodStartLocalDay: bounds.startLocalDay,
     configured: expectedBaseMinor > 0,
   };
 }

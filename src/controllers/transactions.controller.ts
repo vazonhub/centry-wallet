@@ -18,12 +18,6 @@ export interface AddTransactionInput {
   categoryId: Id | null;
   note: string | null;
   occurredAtSec?: number;
-  /**
-   * Income only: mark this as the regular payout for a schedule slot (B21). Sets
-   * that slot's expected amount (drives "можно сегодня"); casual top-ups leave
-   * the schedule unchanged.
-   */
-  regularSlotId?: string;
 }
 
 /**
@@ -48,15 +42,6 @@ async function addTransaction(input: AddTransactionInput): Promise<void> {
   const tx = buildTransaction(draft, rateToBaseE6, nowSec(), currentTzOffsetMin());
   await TransactionsRepo.createTransaction(tx);
   useSettingsStore.getState().setLastAccountId(input.accountId);
-
-  // A regular payout redefines its slot's estimate (B21): store it in the
-  // transaction's own currency (converted to base at display time).
-  if (input.kind === 'income' && input.regularSlotId) {
-    useSettingsStore.getState().setSlotAmount(input.regularSlotId, {
-      minor: input.amountMinorAbs,
-      currency: input.currency,
-    });
-  }
 
   await DataController.loadAll(); // also refreshes the widget snapshot (etap 7)
 }

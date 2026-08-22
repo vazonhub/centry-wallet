@@ -1,5 +1,5 @@
 import type { Account, Category, Transaction } from '@models';
-import type { PayoutSchedule } from '@utils/schedule';
+import type { BudgetPlan } from '@utils/budget';
 import { computeAllowance } from '@utils/summary';
 
 /**
@@ -46,10 +46,10 @@ export interface BuildSnapshotInput {
   recent: Transaction[];
   categories: Category[];
   base: string;
-  /** currency → rate to base ×1e6 (to convert a foreign payout). */
+  /** currency → rate to base ×1e6 (to convert a foreign plan amount). */
   rates: Record<string, number>;
-  /** Recurring payout schedule (B21). */
-  schedule: PayoutSchedule;
+  /** Planned spend for the current period (calendar week/month). */
+  plan: BudgetPlan;
   todayLocalDay: string;
   now: Date;
 }
@@ -69,7 +69,7 @@ function rowNote(t: Transaction, category: Category | undefined): string {
 /** Builds the widget snapshot from the current data store slice. Pure. */
 export function buildWidgetSnapshot(input: BuildSnapshotInput): WidgetSnapshot {
   const { perDayMinor, todaySpentMinor, daysLeft } = computeAllowance({
-    schedule: input.schedule,
+    plan: input.plan,
     recent: input.recent,
     base: input.base,
     rates: input.rates,

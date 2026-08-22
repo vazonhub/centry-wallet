@@ -10,14 +10,19 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "by.vazon.centry",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "CFBundleLocalizations": ["ru", "en"],
+        "CFBundleLocalizations": [
+          "ru",
+          "en"
+        ],
         "AppGroup": "group.by.vazon.centry"
       },
       "entitlements": {
-        "com.apple.security.application-groups": ["group.by.vazon.centry"]
+        "com.apple.security.application-groups": [
+          "group.by.vazon.centry"
+        ]
       }
     },
     "plugins": [

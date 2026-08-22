@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
 
 import { CurrencyDropdown } from '@components/CurrencyDropdown';
@@ -73,7 +72,7 @@ export function BudgetPlanEditor({ value, onChange, baseCurrency }: Props) {
 
       <Text style={styles.label}>СКОЛЬКО ГОТОВ ТРАТИТЬ</Text>
       <View style={styles.amountRow}>
-        <BottomSheetTextInput
+        <TextInput
           style={styles.amountInput}
           value={amountText}
           onChangeText={setAmount}

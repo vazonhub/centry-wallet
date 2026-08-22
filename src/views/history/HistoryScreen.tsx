@@ -156,16 +156,6 @@ export function HistoryScreen() {
     [month],
   );
 
-  // Pin each day header while its transactions scroll under it (sticky dates).
-  const stickyHeaderIndices = useMemo(
-    () =>
-      rows.reduce<number[]>((acc, r, i) => {
-        if (r.type === 'header') acc.push(i);
-        return acc;
-      }, []),
-    [rows],
-  );
-
   // Pinned above the scrolling list (owner: month bar fixed on scroll).
   const MonthBar = (
     <View style={styles.monthBar}>
@@ -288,7 +278,11 @@ export function HistoryScreen() {
           )}
         </Animated.View>
       )}
+    </View>
+  );
 
+  const Header = (
+    <View style={styles.header}>
       <TextInput
         value={query}
         onChangeText={setQuery}
@@ -300,7 +294,6 @@ export function HistoryScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={styles.filtersScroll}
         contentContainerStyle={styles.filters}
       >
         {(
@@ -342,6 +335,7 @@ export function HistoryScreen() {
           data={rows}
           onScroll={onScroll}
           scrollEventThrottle={16}
+          ListHeaderComponent={Header}
           ListEmptyComponent={
             <Text {...textProps('footnote')} style={styles.empty}>
               В этом месяце записей нет.
@@ -349,8 +343,10 @@ export function HistoryScreen() {
           }
           keyExtractor={(row) => (row.type === 'header' ? `h:${row.day}` : `t:${row.tx.id}`)}
           getItemType={(row) => row.type}
-          stickyHeaderIndices={stickyHeaderIndices}
-          contentContainerStyle={{ paddingBottom: insets.bottom + TAB_BAR_HEIGHT + Spacing.md }}
+          contentContainerStyle={{
+            ...styles.listContent,
+            paddingBottom: insets.bottom + TAB_BAR_HEIGHT + Spacing.md,
+          }}
           renderItem={({ item }) => {
             if (item.type === 'header') {
               return (
@@ -408,12 +404,14 @@ const makeStyles = (p: Palette) =>
   StyleSheet.create({
     canvas: { flex: 1, backgroundColor: p.canvasBase },
     safe: { flex: 1 },
+    listContent: { paddingHorizontal: Spacing.screenPadding },
     monthBar: {
       paddingHorizontal: Spacing.screenPadding,
       paddingTop: Spacing.lg,
       paddingBottom: Spacing.sm,
       backgroundColor: p.canvasBase,
     },
+    header: { gap: Spacing.md, paddingTop: Spacing.sm },
     fixedStats: {
       paddingHorizontal: Spacing.screenPadding,
       paddingTop: Spacing.sm,
@@ -448,10 +446,7 @@ const makeStyles = (p: Palette) =>
       borderRadius: Radius.md,
       backgroundColor: p.glassLightBg,
     },
-    // Break the filter row out of the fixed block's padding so it scrolls
-    // edge-to-edge, then re-inset the first/last chip via the content padding.
-    filtersScroll: { marginHorizontal: -Spacing.screenPadding },
-    filters: { flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.screenPadding },
+    filters: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.sm },
     filterChip: {
       paddingHorizontal: Spacing.lg,
       paddingVertical: Spacing.sm,
@@ -489,24 +484,13 @@ const makeStyles = (p: Palette) =>
       marginTop: Spacing.md,
       letterSpacing: Typography.micro.letterSpacing,
     },
-    empty: {
-      color: p.dim2,
-      paddingVertical: Spacing.xxl,
-      paddingHorizontal: Spacing.screenPadding,
-      textAlign: 'center',
-    },
+    empty: { color: p.dim2, paddingVertical: Spacing.xxl, textAlign: 'center' },
     dayHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingTop: Spacing.md,
-      paddingBottom: Spacing.xs,
-      // Inset to match the rows; own opaque bg so the pinned (sticky) header hides
-      // the rows scrolling under it. Horizontal inset lives here (not on the list
-      // content) so the pinned header keeps its side padding — FlashList renders
-      // sticky headers in a full-width absolute layer that ignores content padding.
-      marginHorizontal: Spacing.screenPadding,
-      backgroundColor: p.canvasBase,
+      marginTop: Spacing.md,
+      marginBottom: Spacing.xs,
     },
     dayLabel: { color: p.dim2 },
     dayTotal: { color: p.dim, fontSize: Typography.caption.fontSize },
@@ -518,7 +502,6 @@ const makeStyles = (p: Palette) =>
       paddingHorizontal: Spacing.lg,
       borderRadius: Radius.listRow,
       marginBottom: Spacing.xs,
-      marginHorizontal: Spacing.screenPadding,
     },
     rowIconWrap: {
       width: 34,

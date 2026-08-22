@@ -47,12 +47,11 @@ private struct HeroBlock: View {
   }
 }
 
-/// One line of the recent feed (icon · note · amount).
+/// One line of the recent feed — category · amount (no icon).
 private struct RecentRow: View {
   let item: WidgetRecent
   var body: some View {
     HStack(spacing: 6) {
-      Text(item.icon).font(.system(size: 13))
       Text(item.note.isEmpty ? "Без категории" : item.note)
         .font(.system(size: 12))
         .foregroundStyle(Palette.ink)
@@ -67,19 +66,28 @@ private struct RecentRow: View {
   }
 }
 
+/// Bottom caption: how much is still spendable for the whole period.
+private struct PeriodRemaining: View {
+  let snapshot: CentrySnapshot
+  var body: some View {
+    Text("на \(snapshot.periodLabel): \(Money.format(snapshot.periodRemainingMinor)) \(snapshot.currency)")
+      .font(.system(size: 10))
+      .foregroundStyle(Palette.dim)
+      .lineLimit(1)
+      .minimumScaleFactor(0.8)
+  }
+}
+
 struct SmallWidgetView: View {
   let snapshot: CentrySnapshot
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       HeroBlock(snapshot: snapshot)
       Spacer(minLength: 0)
-      Text("\(snapshot.daysLeft) дн. до зарплаты")
-        .font(.system(size: 10))
-        .foregroundStyle(Palette.dim)
-        .lineLimit(1)
+      PeriodRemaining(snapshot: snapshot)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    .padding(14)
+    .padding(12)
     .widgetBackground()
     .widgetURL(URL(string: "centry://add"))
   }
@@ -88,17 +96,15 @@ struct SmallWidgetView: View {
 struct MediumWidgetView: View {
   let snapshot: CentrySnapshot
   var body: some View {
-    HStack(alignment: .top, spacing: 14) {
+    HStack(alignment: .top, spacing: 12) {
       VStack(alignment: .leading, spacing: 6) {
         HeroBlock(snapshot: snapshot)
         Spacer(minLength: 0)
-        Text("\(snapshot.daysLeft) дн. до зарплаты")
-          .font(.system(size: 10))
-          .foregroundStyle(Palette.dim)
+        PeriodRemaining(snapshot: snapshot)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
 
-      VStack(alignment: .leading, spacing: 7) {
+      VStack(alignment: .leading, spacing: 6) {
         if snapshot.recent.isEmpty {
           Text("Нет записей")
             .font(.system(size: 12))
@@ -111,7 +117,7 @@ struct MediumWidgetView: View {
       .frame(maxWidth: .infinity, alignment: .leading)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    .padding(14)
+    .padding(12)
     .widgetBackground()
     .widgetURL(URL(string: "centry://add"))
   }

@@ -68,6 +68,9 @@ describe('buildWidgetSnapshot', () => {
 
     expect(snap.currency).toBe('BYN');
     expect(snap.daysLeft).toBe(12);
+    // Plan 310.00 BYN, one 12.00 expense this period → 298.00 still spendable.
+    expect(snap.periodRemainingMinor).toBe(298_00);
+    expect(snap.periodLabel).toBe('месяц');
     expect(snap.accounts).toEqual([{ name: 'Карта BYN', balanceMinor: 340_20, currency: 'BYN' }]);
     expect(snap.recent).toEqual([
       { icon: '🍔', note: 'Обед', amountMinor: -12_00, currency: 'BYN' },

@@ -4,6 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router';
 
 import { AppIcon } from '@components/AppIcon';
+import { openAccountSheet } from '@components/accountSheetRef';
 import { openInputSheet } from '@components/inputSheetRef';
 import { Money } from '@components/Money';
 import { openTransactionDetail } from '@components/transactionDetailRef';
@@ -163,7 +164,11 @@ export function HomeScreen() {
           {/* Account blocks */}
           <View style={styles.chipsWrap}>
             {accounts.map((a) => (
-              <View key={a.id} style={styles.accountChip}>
+              <Pressable
+                key={a.id}
+                style={styles.accountChip}
+                onPress={() => openAccountSheet(a.id)}
+              >
                 <View style={styles.accountNameRow}>
                   <AppIcon name={a.icon} color={palette.dim} size={14} fallback="wallet-outline" />
                   <Text {...textProps('caption')} style={styles.accountName} numberOfLines={1}>
@@ -175,15 +180,9 @@ export function HomeScreen() {
                   currency={a.currency}
                   style={styles.accountBalance}
                 />
-              </View>
+              </Pressable>
             ))}
-            <Pressable
-              style={styles.addChip}
-              onPress={() => {
-                hapticLight();
-                router.push('/(tabs)/(settings)/accounts' as never);
-              }}
-            >
+            <Pressable style={styles.addChip} onPress={() => openAccountSheet()}>
               <Text style={styles.addChipText}>＋ Счёт</Text>
             </Pressable>
           </View>

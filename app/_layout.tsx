@@ -14,6 +14,7 @@ import { useNotificationResponse } from '@hooks/useNotificationResponse';
 import { usePendingIntent } from '@hooks/usePendingIntent';
 import { useIsDark, usePalette } from '@hooks/usePalette';
 import { useWidgetDeepLink } from '@hooks/useWidgetDeepLink';
+import { AccountSheet } from '@components/AccountSheet';
 import { CategoryEditorSheet } from '@components/CategoryEditorSheet';
 import { TransactionDetailSheet } from '@components/TransactionDetailSheet';
 import { InputSheet } from '@views/input/InputSheet';
@@ -60,6 +61,7 @@ export default function RootLayout() {
                 <Stack.Screen name="(tabs)" />
               </Stack>
               <InputSheet />
+              <AccountSheet />
               <CategoryEditorSheet />
               <TransactionDetailSheet />
               <OnboardingScreen />

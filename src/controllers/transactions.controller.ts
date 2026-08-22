@@ -96,13 +96,20 @@ async function createAccount(input: CreateAccountInput): Promise<Account> {
 export interface UpdateAccountInput {
   name: string;
   kind: Account['kind'];
+  /** Starting balance in the account's own currency (minor units). */
+  openingMinor: number;
 }
 
-/** Edits an account's name / kind (currency is fixed — see repo). */
+/** Edits an account's name / kind / opening balance (currency is fixed — see repo). */
 async function updateAccount(id: Id, input: UpdateAccountInput): Promise<void> {
   await AccountsRepo.updateAccount(
     id,
-    { name: input.name, kind: input.kind, icon: ACCOUNT_KIND_ICONS[input.kind] },
+    {
+      name: input.name,
+      kind: input.kind,
+      icon: ACCOUNT_KIND_ICONS[input.kind],
+      openingMinor: input.openingMinor,
+    },
     nowSec(),
   );
   await DataController.loadAll();

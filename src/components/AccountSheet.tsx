@@ -18,8 +18,14 @@ import type { Account } from '@models';
 import { useDataStore } from '@stores/data.store';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
-import { Radius, Spacing, Typography } from '@theme';
+import { numberTextStyle, Radius, Spacing, Typography } from '@theme';
 import { hapticLight, hapticSuccess } from '@utils/haptics';
+import {
+  amountPlaceholder,
+  minorToAmountInput,
+  parseAmountToMinor,
+  sanitizeAmountInput,
+} from '@utils/money';
 
 const ACCOUNT_KINDS: { kind: Account['kind']; label: string; icon: IoniconName }[] = [
   { kind: 'cash', label: 'Наличные', icon: ACCOUNT_KIND_ICONS.cash },
@@ -43,6 +49,7 @@ export function AccountSheet() {
   const [name, setName] = useState('');
   const [currency, setCurrency] = useState(baseCurrency);
   const [kind, setKind] = useState<Account['kind']>('cash');
+  const [opening, setOpening] = useState('');
 
   useImperativeHandle(
     accountSheetRef,
@@ -56,11 +63,13 @@ export function AccountSheet() {
           setName(account.name);
           setCurrency(account.currency);
           setKind(account.kind);
+          setOpening(minorToAmountInput(account.openingMinor, account.currency));
         } else {
           setEditingId(null);
           setName('');
           setCurrency(useSettingsStore.getState().baseCurrency);
           setKind('cash');
+          setOpening('');
         }
         sheetRef.current?.present();
         hapticLight();
@@ -70,16 +79,19 @@ export function AccountSheet() {
   );
 
   const onSubmit = async () => {
+    const openingMinor = parseAmountToMinor(opening, currency) ?? 0;
     if (editingId) {
       await TransactionsController.updateAccount(editingId, {
         name: name.trim() || currency,
         kind,
+        openingMinor,
       });
     } else {
       await TransactionsController.createAccount({
         name: name.trim() || currency,
         currency,
         kind,
+        openingMinor,
       });
     }
     sheetRef.current?.dismiss();
@@ -120,6 +132,18 @@ export function AccountSheet() {
         ) : (
           <CurrencyDropdown value={currency} onChange={setCurrency} />
         )}
+        <Text style={styles.formLabel}>СТАРТОВЫЙ БАЛАНС</Text>
+        <BottomSheetView style={styles.amountRow}>
+          <BottomSheetTextInput
+            style={styles.amountInput}
+            value={opening}
+            onChangeText={(t) => setOpening(sanitizeAmountInput(t, currency))}
+            placeholder={amountPlaceholder(currency)}
+            placeholderTextColor={palette.dim2}
+            keyboardType="decimal-pad"
+          />
+          <Text style={styles.amountCurrency}>{currency}</Text>
+        </BottomSheetView>
         <Text style={styles.formLabel}>ТИП</Text>
         <BottomSheetView style={styles.kindRow}>
           {ACCOUNT_KINDS.map((k) => {
@@ -182,6 +206,22 @@ const makeStyles = (p: Palette) =>
     },
     currencyLockedText: { color: p.ink, fontSize: Typography.body.fontSize },
     currencyLockedHint: { color: p.dim2, fontSize: Typography.caption.fontSize },
+    amountRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.md,
+      paddingVertical: Spacing.md,
+      paddingHorizontal: Spacing.lg,
+      borderRadius: Radius.md,
+      backgroundColor: p.glassLightBg,
+    },
+    amountInput: {
+      ...numberTextStyle,
+      flex: 1,
+      color: p.ink,
+      fontSize: Typography.headline.fontSize,
+    },
+    amountCurrency: { color: p.dim, fontSize: Typography.body.fontSize },
     kindRow: { flexDirection: 'row', gap: Spacing.sm },
     kindChip: {
       flexDirection: 'row',

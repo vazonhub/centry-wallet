@@ -409,7 +409,12 @@ const makeStyles = (p: Palette) =>
     carryText: { fontSize: Typography.footnote.fontSize },
     carryLabel: { fontSize: Typography.caption.fontSize },
     // Accounts
-    chipsRow: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.sm },
+    chipsRow: {
+      flexDirection: 'row',
+      gap: Spacing.sm,
+      paddingRight: Spacing.sm,
+      paddingBottom: Spacing.sm,
+    },
     accountChip: {
       paddingHorizontal: Spacing.lg,
       paddingVertical: Spacing.md,

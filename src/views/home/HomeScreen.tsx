@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { type ReactNode, useCallback, useMemo } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -125,6 +125,61 @@ export function HomeScreen() {
     openBudgetSheet();
   }, []);
 
+  // Flat feed with sticky day headers: [header, ...cards, header, ...cards].
+  const feed = useMemo(() => {
+    const elements: ReactNode[] = [];
+    const sticky: number[] = [];
+    for (const [day, txs] of days) {
+      sticky.push(elements.length);
+      elements.push(
+        <View key={`h:${day}`} style={styles.dayHeader}>
+          <Text {...textProps('caption')} style={styles.dayLabel}>
+            {day}
+          </Text>
+          <Money
+            minor={dayNetBaseMinor(txs)}
+            currency={base}
+            options={{ showPlus: true }}
+            style={styles.dayTotal}
+          />
+        </View>,
+      );
+      for (const t of txs) {
+        const cat = t.categoryId ? categoryById[t.categoryId] : undefined;
+        const isTransfer = t.kind === 'transfer';
+        const accent = isTransfer ? palette.dim : (cat?.color ?? palette.ink);
+        const iconName = isTransfer
+          ? TRANSFER_ICON
+          : (cat?.icon ?? (t.amountMinor >= 0 ? INCOME_FALLBACK_ICON : EXPENSE_FALLBACK_ICON));
+        const title = isTransfer ? 'Перевод' : t.note || cat?.name || 'Без категории';
+        elements.push(
+          <Pressable
+            key={t.id}
+            onPress={() => openTransactionDetail(t)}
+            style={[styles.txRow, { backgroundColor: hexToRgba(accent, 0.14) }]}
+          >
+            <View style={[styles.txIconWrap, { backgroundColor: hexToRgba(accent, 0.2) }]}>
+              <AppIcon name={iconName} color={accent} size={18} />
+            </View>
+            <Text {...textProps('row')} style={styles.rowTitle} numberOfLines={1}>
+              {title}
+            </Text>
+            <Money
+              minor={t.amountMinor}
+              currency={t.currency}
+              options={{ showPlus: !isTransfer }}
+              style={[
+                styles.rowAmount,
+                { color: t.amountMinor >= 0 && !isTransfer ? palette.pos : palette.ink },
+              ]}
+            />
+          </Pressable>,
+        );
+      }
+    }
+    return { elements, sticky };
+  }, [days, categoryById, palette, base, styles]);
+
   return (
     <View style={styles.canvas}>
       <SafeAreaView style={styles.safe} edges={['top']}>
@@ -244,67 +299,19 @@ export function HomeScreen() {
           </ScrollView>
         </View>
 
-        {/* Feed — floating day labels; each entry is its own category-tinted card */}
+        {/* Feed — sticky day labels; each entry is its own category-tinted card */}
         <ScrollView
           style={styles.feedScroll}
           contentContainerStyle={styles.feedContent}
           showsVerticalScrollIndicator={false}
+          stickyHeaderIndices={recent.length === 0 ? undefined : feed.sticky}
         >
           {recent.length === 0 ? (
             <Text {...textProps('footnote')} style={styles.empty}>
               Пока пусто. Нажмите + и запишите первую трату.
             </Text>
           ) : (
-            days.map(([day, txs]) => (
-              <View key={day} style={styles.dayGroup}>
-                <View style={styles.dayHeader}>
-                  <Text {...textProps('caption')} style={styles.dayLabel}>
-                    {day}
-                  </Text>
-                  <Money
-                    minor={dayNetBaseMinor(txs)}
-                    currency={base}
-                    options={{ showPlus: true }}
-                    style={styles.dayTotal}
-                  />
-                </View>
-                {txs.map((t) => {
-                  const cat = t.categoryId ? categoryById[t.categoryId] : undefined;
-                  const isTransfer = t.kind === 'transfer';
-                  const accent = isTransfer ? palette.dim : (cat?.color ?? palette.ink);
-                  const iconName = isTransfer
-                    ? TRANSFER_ICON
-                    : (cat?.icon ??
-                      (t.amountMinor >= 0 ? INCOME_FALLBACK_ICON : EXPENSE_FALLBACK_ICON));
-                  const title = isTransfer ? 'Перевод' : t.note || cat?.name || 'Без категории';
-                  return (
-                    <Pressable
-                      key={t.id}
-                      onPress={() => openTransactionDetail(t)}
-                      style={[styles.txRow, { backgroundColor: hexToRgba(accent, 0.14) }]}
-                    >
-                      <View
-                        style={[styles.txIconWrap, { backgroundColor: hexToRgba(accent, 0.2) }]}
-                      >
-                        <AppIcon name={iconName} color={accent} size={18} />
-                      </View>
-                      <Text {...textProps('row')} style={styles.rowTitle} numberOfLines={1}>
-                        {title}
-                      </Text>
-                      <Money
-                        minor={t.amountMinor}
-                        currency={t.currency}
-                        options={{ showPlus: !isTransfer }}
-                        style={[
-                          styles.rowAmount,
-                          { color: t.amountMinor >= 0 && !isTransfer ? palette.pos : palette.ink },
-                        ]}
-                      />
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ))
+            feed.elements
           )}
         </ScrollView>
       </SafeAreaView>
@@ -434,13 +441,15 @@ const makeStyles = (p: Palette) =>
     addChipText: { color: p.ink, fontSize: Typography.footnote.fontSize },
     // Feed — floating day label + per-entry tinted cards
     empty: { color: p.dim2, textAlign: 'center', paddingVertical: Spacing.lg },
-    dayGroup: { gap: Spacing.cardGap },
     dayHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
       paddingHorizontal: Spacing.xs,
-      paddingBottom: 2,
+      paddingTop: Spacing.xs,
+      paddingBottom: Spacing.xs,
+      // Opaque so the pinned (sticky) day header hides the cards scrolling under it.
+      backgroundColor: p.canvasBase,
     },
     dayLabel: { color: p.dim2 },
     dayTotal: { color: p.dim, fontSize: Typography.caption.fontSize },

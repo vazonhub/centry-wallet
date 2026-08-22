@@ -154,8 +154,10 @@ export function HistoryScreen() {
           <Money
             minor={income}
             currency={base}
-            options={{ hideCode: true }}
             style={styles.totalPos}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
           />
         </View>
         <View style={styles.totalCard}>
@@ -165,8 +167,10 @@ export function HistoryScreen() {
           <Money
             minor={outcome}
             currency={base}
-            options={{ hideCode: true }}
             style={styles.totalNeg}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
           />
         </View>
         <View style={styles.totalCard}>
@@ -176,8 +180,11 @@ export function HistoryScreen() {
           <Money
             minor={income - outcome}
             currency={base}
-            options={{ showPlus: true, hideCode: true }}
+            options={{ showPlus: true }}
             style={[styles.totalDiff, { color: income - outcome >= 0 ? palette.pos : palette.neg }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
           />
         </View>
       </View>

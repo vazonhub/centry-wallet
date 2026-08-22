@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "by.vazon.centry",
-      "buildNumber": "1",
+      "buildNumber": "2",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleLocalizations": ["ru", "en"],
@@ -31,7 +31,7 @@
           "backgroundColor": "#faf3e4",
           "dark": {
             "image": "./assets/logo-night-theme.png",
-            "backgroundColor": "#000e49"
+            "backgroundColor": "#000000"
           }
         }
       ],

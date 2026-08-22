@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { ScreenHeader } from '@components/ScreenHeader';
@@ -7,7 +8,7 @@ import { usePalette } from '@hooks/usePalette';
 import { parseHhMm, syncEveningReminder } from '@services/notifications';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
-import { Radius, Spacing, Typography } from '@theme';
+import { Radius, Spacing, TAB_BAR_HEIGHT, Typography } from '@theme';
 
 /** 'HH:MM' → today's Date at that time (for the time picker). */
 function timeToDate(time: string): Date {
@@ -26,6 +27,7 @@ function dateToTime(d: Date): string {
 export function InputSettingsScreen() {
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
+  const insets = useSafeAreaInsets();
   const s = useSettingsStore();
 
   const rows: { label: string; value: boolean; onChange: (v: boolean) => void }[] = [
@@ -45,7 +47,13 @@ export function InputSettingsScreen() {
   return (
     <View style={styles.canvas}>
       <ScreenHeader title="Ввод" />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingBottom: insets.bottom + TAB_BAR_HEIGHT + Spacing.md },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.card}>
           {rows.map((r) => (
             <View key={r.label} style={styles.row}>
@@ -85,7 +93,11 @@ export function InputSettingsScreen() {
 const makeStyles = (p: Palette) =>
   StyleSheet.create({
     canvas: { flex: 1, backgroundColor: p.canvasBase },
-    scroll: { padding: Spacing.screenPadding, gap: Spacing.md },
+    scroll: {
+      paddingTop: Spacing.screenPadding,
+      paddingHorizontal: Spacing.screenPadding,
+      gap: Spacing.md,
+    },
     card: {
       backgroundColor: p.glassBg,
       borderColor: p.glassBorder,

@@ -22,6 +22,9 @@ struct CentryWidget: Widget {
     .configurationDisplayName("Centry")
     .description("Сколько можно потратить сегодня")
     .supportedFamilies([.systemSmall, .systemMedium])
+    // Drop the ~16pt system content margins so our own tighter padding controls
+    // the layout (more room for content in the small widget).
+    .contentMarginsDisabled()
   }
 }
 

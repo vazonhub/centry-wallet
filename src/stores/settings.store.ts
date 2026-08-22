@@ -5,7 +5,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { DEFAULT_BASE_CURRENCY } from '@constants/currencies';
 import { SETTINGS_DEFAULTS, type ThemeChoice } from '@constants/settings';
 import { mmkvStorage } from '@storage/zustandMmkv';
-import { defaultSchedule, type PayoutSchedule, type PayoutSlotValue } from '@utils/schedule';
+import { type BudgetPlan, defaultBudgetPlan } from '@utils/budget';
 
 export type ResolvedScheme = 'light' | 'dark';
 
@@ -27,12 +27,10 @@ const resolve = (theme: ThemeChoice): ResolvedScheme =>
 interface SettingsState {
   baseCurrency: string;
   /**
-   * Recurring payout schedule (B21, generalized). Drives "можно сегодня" =
-   * period payout ÷ days-in-period. Per-slot amounts live in `payoutSchedule.
-   * amounts`; recording income with the "регулярная выплата" toggle updates a
-   * slot.
+   * Planned spend for a calendar week/month. Drives "можно сегодня" = plan ÷
+   * days-in-period. A standalone budget: incomes/expenses never change it.
    */
-  payoutSchedule: PayoutSchedule;
+  budgetPlan: BudgetPlan;
   /** True once the onboarding card has been completed or skipped (B11). */
   onboardingDone: boolean;
   theme: ThemeChoice;
@@ -47,9 +45,7 @@ interface SettingsState {
   lastAccountId: string | null;
 
   setBaseCurrency(c: string): void;
-  setPayoutSchedule(s: PayoutSchedule): void;
-  /** Sets the expected amount (in its own currency) for one payout slot. */
-  setSlotAmount(slotId: string, value: PayoutSlotValue): void;
+  setBudgetPlan(p: BudgetPlan): void;
   completeOnboarding(): void;
   setTheme(t: ThemeChoice): void;
   setHideAmounts(v: boolean): void;
@@ -64,7 +60,7 @@ export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
       baseCurrency: DEFAULT_BASE_CURRENCY,
-      payoutSchedule: defaultSchedule(),
+      budgetPlan: defaultBudgetPlan(DEFAULT_BASE_CURRENCY),
       onboardingDone: false,
       theme: SETTINGS_DEFAULTS.theme,
       resolvedScheme: resolve(SETTINGS_DEFAULTS.theme),
@@ -76,14 +72,7 @@ export const useSettingsStore = create<SettingsState>()(
       lastAccountId: null,
 
       setBaseCurrency: (baseCurrency) => set({ baseCurrency }),
-      setPayoutSchedule: (payoutSchedule) => set({ payoutSchedule }),
-      setSlotAmount: (slotId, value) =>
-        set((s) => ({
-          payoutSchedule: {
-            ...s.payoutSchedule,
-            amounts: { ...s.payoutSchedule.amounts, [slotId]: value },
-          },
-        })),
+      setBudgetPlan: (budgetPlan) => set({ budgetPlan }),
       completeOnboarding: () => set({ onboardingDone: true }),
       setTheme: (theme) => {
         if (theme === 'system') {

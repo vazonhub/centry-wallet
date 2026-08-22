@@ -25,14 +25,29 @@ export interface InputPrefill {
 
 let pendingPrefill: InputPrefill | null = null;
 
-/** Opens the input sheet, optionally seeding the form (Siri/App Intent path). */
+/**
+ * Opens the input sheet, optionally seeding the form (Siri/App Intent path).
+ *
+ * On a cold start via the widget deep link the ref can still be null when the
+ * launch URL resolves (the sheet mounts a tick later), so we retry a few frames
+ * instead of silently no-opping — otherwise tapping the widget opens the app but
+ * never shows the sheet.
+ */
 export function openInputSheet(prefill?: InputPrefill): void {
-  if (!inputSheetRef.current) {
-    console.warn('[input] sheet ref not ready');
-    return;
-  }
   pendingPrefill = prefill ?? null;
-  inputSheetRef.current.present();
+  let attempts = 0;
+  const tryPresent = (): void => {
+    if (inputSheetRef.current) {
+      inputSheetRef.current.present();
+      return;
+    }
+    if (attempts++ < 30) {
+      requestAnimationFrame(tryPresent);
+      return;
+    }
+    console.warn('[input] sheet ref not ready');
+  };
+  tryPresent();
 }
 
 /** Reads and clears the pending prefill — called once by the sheet on open. */

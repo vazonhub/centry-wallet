@@ -18,12 +18,6 @@ export interface AddTransactionInput {
   categoryId: Id | null;
   note: string | null;
   occurredAtSec?: number;
-  /**
-   * Income only: mark this as the regular payout for a schedule slot (B21). Sets
-   * that slot's expected amount (drives "можно сегодня"); casual top-ups leave
-   * the schedule unchanged.
-   */
-  regularSlotId?: string;
 }
 
 /**
@@ -48,15 +42,6 @@ async function addTransaction(input: AddTransactionInput): Promise<void> {
   const tx = buildTransaction(draft, rateToBaseE6, nowSec(), currentTzOffsetMin());
   await TransactionsRepo.createTransaction(tx);
   useSettingsStore.getState().setLastAccountId(input.accountId);
-
-  // A regular payout redefines its slot's estimate (B21): store it in the
-  // transaction's own currency (converted to base at display time).
-  if (input.kind === 'income' && input.regularSlotId) {
-    useSettingsStore.getState().setSlotAmount(input.regularSlotId, {
-      minor: input.amountMinorAbs,
-      currency: input.currency,
-    });
-  }
 
   await DataController.loadAll(); // also refreshes the widget snapshot (etap 7)
 }
@@ -96,13 +81,20 @@ async function createAccount(input: CreateAccountInput): Promise<Account> {
 export interface UpdateAccountInput {
   name: string;
   kind: Account['kind'];
+  /** Starting balance in the account's own currency (minor units). */
+  openingMinor: number;
 }
 
-/** Edits an account's name / kind (currency is fixed — see repo). */
+/** Edits an account's name / kind / opening balance (currency is fixed — see repo). */
 async function updateAccount(id: Id, input: UpdateAccountInput): Promise<void> {
   await AccountsRepo.updateAccount(
     id,
-    { name: input.name, kind: input.kind, icon: ACCOUNT_KIND_ICONS[input.kind] },
+    {
+      name: input.name,
+      kind: input.kind,
+      icon: ACCOUNT_KIND_ICONS[input.kind],
+      openingMinor: input.openingMinor,
+    },
     nowSec(),
   );
   await DataController.loadAll();
@@ -150,12 +142,27 @@ async function addTransfer(input: AddTransferInput): Promise<void> {
   await DataController.loadAll();
 }
 
-/** Edits a transaction's category/note (amount edit lands with the full editor). */
+/** Edits a transaction's category/note. */
 async function editTransactionMeta(
   id: Id,
   fields: { categoryId?: Id | null; note?: string | null },
 ): Promise<void> {
   await TransactionsRepo.updateTransactionMeta(id, fields, nowSec());
+  await DataController.loadAll();
+}
+
+/**
+ * Corrects a transaction's amount. `amountMinorAbs` is the non-negative
+ * magnitude; the sign is applied from `kind` (expense → negative, income →
+ * positive). Not for transfers.
+ */
+async function editTransactionAmount(
+  id: Id,
+  amountMinorAbs: number,
+  kind: 'expense' | 'income',
+): Promise<void> {
+  const signed = kind === 'income' ? amountMinorAbs : -amountMinorAbs;
+  await TransactionsRepo.updateTransactionAmount(id, signed, nowSec());
   await DataController.loadAll();
 }
 
@@ -177,6 +184,7 @@ export const TransactionsController = {
   createAccount,
   updateAccount,
   editTransactionMeta,
+  editTransactionAmount,
   editTransactionDate,
   deleteTransaction,
 };

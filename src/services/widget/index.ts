@@ -33,7 +33,7 @@ export function refreshWidgetSnapshot(): void {
       categories: data.categories,
       base: settings.baseCurrency,
       rates: data.rates,
-      schedule: settings.payoutSchedule,
+      plan: settings.budgetPlan,
       todayLocalDay: todayLocalDay(),
       now: new Date(),
     });

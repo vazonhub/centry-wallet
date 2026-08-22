@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppIcon } from '@components/AppIcon';
 import { openCategoryEditor } from '@components/categoryEditorRef';
@@ -8,13 +9,14 @@ import { usePalette } from '@hooks/usePalette';
 import type { Category, CategoryKind } from '@models';
 import { useDataStore } from '@stores/data.store';
 import type { Palette } from '@theme';
-import { Radius, Spacing, Typography } from '@theme';
+import { Radius, Spacing, TAB_BAR_HEIGHT, Typography } from '@theme';
 import { hexToRgba } from '@utils/color';
 import { hapticLight } from '@utils/haptics';
 
 export function CategoriesScreen() {
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
+  const insets = useSafeAreaInsets();
   const categories = useDataStore((s) => s.categories);
 
   const groups = useMemo(
@@ -62,7 +64,13 @@ export function CategoriesScreen() {
   return (
     <View style={styles.canvas}>
       <ScreenHeader title="Категории" />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingBottom: insets.bottom + TAB_BAR_HEIGHT + Spacing.md },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         {renderSection('РАСХОДЫ', 'expense', groups.expense)}
         {renderSection('ДОХОДЫ', 'income', groups.income)}
       </ScrollView>
@@ -73,7 +81,11 @@ export function CategoriesScreen() {
 const makeStyles = (p: Palette) =>
   StyleSheet.create({
     canvas: { flex: 1, backgroundColor: p.canvasBase },
-    scroll: { padding: Spacing.screenPadding, gap: Spacing.xl },
+    scroll: {
+      paddingTop: Spacing.screenPadding,
+      paddingHorizontal: Spacing.screenPadding,
+      gap: Spacing.xl,
+    },
     section: { gap: Spacing.md },
     sectionTitle: {
       color: p.dim,

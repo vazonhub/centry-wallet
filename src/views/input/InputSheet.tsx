@@ -24,7 +24,6 @@ import type { Palette } from '@theme';
 import { numberTextStyle, Radius, Spacing, Typography } from '@theme';
 import { hexToRgba } from '@utils/color';
 import { hapticLight, hapticSuccess } from '@utils/haptics';
-import { scheduleSlots } from '@utils/schedule';
 import {
   amountPlaceholder,
   convertFromBase,
@@ -58,16 +57,12 @@ export function InputSheet() {
   const rates = useDataStore((s) => s.rates);
   const base = useSettingsStore((s) => s.baseCurrency);
   const lastAccountId = useSettingsStore((s) => s.lastAccountId);
-  const payoutSchedule = useSettingsStore((s) => s.payoutSchedule);
-  const slots = useMemo(() => scheduleSlots(payoutSchedule), [payoutSchedule]);
 
   const [kind, setKind] = useState<TransactionKind>('expense');
   const [amount, setAmount] = useState('');
   const [accountId, setAccountId] = useState<string | null>(null);
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [note, setNote] = useState('');
-  const [markRegular, setMarkRegular] = useState(false);
-  const [regularSlotId, setRegularSlotId] = useState<string | null>(null);
   const [occurredAt, setOccurredAt] = useState<Date>(() => new Date());
   const [fromAccountId, setFromAccountId] = useState<string | null>(null);
   const [toAccountId, setToAccountId] = useState<string | null>(null);
@@ -103,8 +98,6 @@ export function InputSheet() {
     setKind('expense');
     setAmount('');
     setNote('');
-    setMarkRegular(false);
-    setRegularSlotId(null);
     setOccurredAt(new Date());
     setCategoryId(null);
     setAccountId(initial);
@@ -148,17 +141,14 @@ export function InputSheet() {
       categoryId,
       note: note.trim() || null,
       occurredAtSec: Math.floor(occurredAt.getTime() / 1000),
-      regularSlotId: kind === 'income' && markRegular ? (regularSlotId ?? slots[0]?.id) : undefined,
     });
     hapticSuccess();
     setAmount('');
     setNote('');
     setCategoryId(null);
-    setMarkRegular(false);
-    setRegularSlotId(null);
     setOccurredAt(new Date());
     inputSheetRef.current?.dismiss();
-  }, [account, amount, kind, categoryId, note, markRegular, regularSlotId, slots, occurredAt]);
+  }, [account, amount, kind, categoryId, note, occurredAt]);
 
   const transfer = useMemo(() => {
     if (!fromAccount || !toAccount) return null;
@@ -285,10 +275,14 @@ export function InputSheet() {
   return (
     <BottomSheetModal
       ref={inputSheetRef}
-      snapPoints={['75%']}
+      snapPoints={['75%', '95%']}
       enableDynamicSizing={false}
       enablePanDownToClose
-      keyboardBehavior="interactive"
+      // `extend` grows the sheet to its tallest snap point when the keyboard
+      // opens, keeping the amount field (top of the content) visible above the
+      // keyboard. `interactive` instead slid the whole 75% sheet up by the
+      // keyboard height, pushing the amount field off the top of the screen.
+      keyboardBehavior="extend"
       keyboardBlurBehavior="restore"
       backdropComponent={renderBackdrop}
       backgroundStyle={styles.sheetBg}
@@ -458,54 +452,6 @@ export function InputSheet() {
                     </Text>
                   </Pressable>
                 </ScrollView>
-                {kind === 'income' && (
-                  <>
-                    <Pressable
-                      style={styles.regularRow}
-                      onPress={() => {
-                        setMarkRegular((v) => !v);
-                        if (!markRegular) setRegularSlotId(slots[0]?.id ?? null);
-                        hapticLight();
-                      }}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: markRegular }}
-                    >
-                      <AppIcon
-                        name={markRegular ? 'checkbox' : 'square-outline'}
-                        color={markRegular ? palette.accent : palette.dim}
-                        size={22}
-                      />
-                      <View style={styles.regularTextWrap}>
-                        <Text style={styles.regularTitle}>Регулярная выплата</Text>
-                        <Text style={styles.regularHint}>Обновит ожидаемую сумму на период</Text>
-                      </View>
-                    </Pressable>
-                    {markRegular && slots.length > 1 && (
-                      <>
-                        <Text style={styles.label}>ЗА КАКУЮ ВЫПЛАТУ</Text>
-                        <View style={styles.chipsRow}>
-                          {slots.map((slot) => {
-                            const active = (regularSlotId ?? slots[0]?.id) === slot.id;
-                            return (
-                              <Pressable
-                                key={slot.id}
-                                onPress={() => {
-                                  setRegularSlotId(slot.id);
-                                  hapticLight();
-                                }}
-                                style={[styles.chip, active && styles.chipActive]}
-                              >
-                                <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                                  {slot.label}
-                                </Text>
-                              </Pressable>
-                            );
-                          })}
-                        </View>
-                      </>
-                    )}
-                  </>
-                )}
               </>
             )}
 
@@ -620,10 +566,6 @@ const makeStyles = (p: Palette) =>
     catText: { color: p.dim, fontSize: Typography.caption.fontSize, textAlign: 'center' },
     catTextActive: { color: p.ink, fontWeight: '600' },
     dateRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    regularRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-    regularTextWrap: { flex: 1 },
-    regularTitle: { color: p.ink, fontSize: Typography.body.fontSize },
-    regularHint: { color: p.dim, fontSize: Typography.caption.fontSize },
     note: {
       color: p.ink,
       fontSize: Typography.body.fontSize,

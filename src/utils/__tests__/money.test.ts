@@ -6,6 +6,8 @@ import {
   formatMoney,
   getMinorUnits,
   localDay,
+  minorToAmountInput,
+  parseAmountToMinor,
   perDay,
   sumMixed,
 } from '@utils/money';
@@ -172,5 +174,32 @@ describe('formatMoney — the only formatter (rule 7)', () => {
     expect(formatMoney(-500, 'BYN', { hideCode: true })).toBe('-5,00');
     expect(formatMoney(-500, 'BYN', { signless: true, hideCode: true })).toBe('5,00');
     expect(formatMoney(0, 'BYN', { showPlus: true })).toBe('0,00 BYN');
+  });
+});
+
+describe('minorToAmountInput — editable field pre-fill (inverse of parseAmountToMinor)', () => {
+  it('renders an ungrouped major string with the currency precision', () => {
+    expect(minorToAmountInput(1_234_56, 'USD')).toBe('1234.56');
+    expect(minorToAmountInput(5_00, 'USD')).toBe('5.00');
+    expect(minorToAmountInput(7, 'USD')).toBe('0.07');
+  });
+
+  it('returns empty for zero so the placeholder shows', () => {
+    expect(minorToAmountInput(0, 'USD')).toBe('');
+  });
+
+  it('honours zero- and three-decimal currencies', () => {
+    expect(minorToAmountInput(1500, 'JPY')).toBe('1500');
+    expect(minorToAmountInput(1_234, 'KWD')).toBe('1.234');
+  });
+
+  it('round-trips through parseAmountToMinor', () => {
+    for (const [minor, cur] of [
+      [1_234_56, 'USD'],
+      [1500, 'JPY'],
+      [1_234, 'KWD'],
+    ] as const) {
+      expect(parseAmountToMinor(minorToAmountInput(minor, cur), cur)).toBe(minor);
+    }
   });
 });

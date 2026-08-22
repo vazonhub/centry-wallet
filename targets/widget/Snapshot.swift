@@ -24,6 +24,8 @@ struct CentrySnapshot: Codable, Hashable {
   let currency: String
   let daysLeft: Int
   let todaySpentMinor: Int
+  let periodRemainingMinor: Int
+  let periodLabel: String
   let accounts: [WidgetAccount]
   let recent: [WidgetRecent]
   let updatedAt: Int
@@ -34,6 +36,8 @@ struct CentrySnapshot: Codable, Hashable {
     currency: "BYN",
     daysLeft: 1,
     todaySpentMinor: 0,
+    periodRemainingMinor: 0,
+    periodLabel: "месяц",
     accounts: [],
     recent: [],
     updatedAt: 0

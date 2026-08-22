@@ -81,13 +81,14 @@ private struct PeriodRemaining: View {
 struct SmallWidgetView: View {
   let snapshot: CentrySnapshot
   var body: some View {
+    // Content grouped and vertically centered (no gap between the hero and the
+    // period-remaining caption).
     VStack(alignment: .leading, spacing: 6) {
       HeroBlock(snapshot: snapshot)
-      Spacer(minLength: 0)
       PeriodRemaining(snapshot: snapshot)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    .padding(12)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    .padding(16)
     .widgetBackground()
     .widgetURL(URL(string: "centry://add"))
   }
@@ -96,14 +97,15 @@ struct SmallWidgetView: View {
 struct MediumWidgetView: View {
   let snapshot: CentrySnapshot
   var body: some View {
-    HStack(alignment: .top, spacing: 12) {
+    HStack(alignment: .center, spacing: 16) {
+      // Left: hero + period-remaining, grouped and vertically centered.
       VStack(alignment: .leading, spacing: 6) {
         HeroBlock(snapshot: snapshot)
-        Spacer(minLength: 0)
         PeriodRemaining(snapshot: snapshot)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
 
+      // Right: recent entries, vertically centered with a little extra inset.
       VStack(alignment: .leading, spacing: 6) {
         if snapshot.recent.isEmpty {
           Text("Нет записей")
@@ -112,12 +114,12 @@ struct MediumWidgetView: View {
         } else {
           ForEach(snapshot.recent, id: \.self) { RecentRow(item: $0) }
         }
-        Spacer(minLength: 0)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
+      .padding(.leading, 4)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    .padding(12)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+    .padding(16)
     .widgetBackground()
     .widgetURL(URL(string: "centry://add"))
   }

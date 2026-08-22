@@ -1,5 +1,5 @@
 import { useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
@@ -125,15 +125,15 @@ export function AccountSheet() {
         />
         <Text style={styles.formLabel}>ВАЛЮТА</Text>
         {editingId ? (
-          <BottomSheetView style={styles.currencyLocked}>
+          <View style={styles.currencyLocked}>
             <Text style={styles.currencyLockedText}>{currency}</Text>
             <Text style={styles.currencyLockedHint}>валюту счёта менять нельзя</Text>
-          </BottomSheetView>
+          </View>
         ) : (
           <CurrencyDropdown value={currency} onChange={setCurrency} />
         )}
         <Text style={styles.formLabel}>СТАРТОВЫЙ БАЛАНС</Text>
-        <BottomSheetView style={styles.amountRow}>
+        <View style={styles.amountRow}>
           <BottomSheetTextInput
             style={styles.amountInput}
             value={opening}
@@ -143,9 +143,9 @@ export function AccountSheet() {
             keyboardType="decimal-pad"
           />
           <Text style={styles.amountCurrency}>{currency}</Text>
-        </BottomSheetView>
+        </View>
         <Text style={styles.formLabel}>ТИП</Text>
-        <BottomSheetView style={styles.kindRow}>
+        <View style={styles.kindRow}>
           {ACCOUNT_KINDS.map((k) => {
             const active = k.kind === kind;
             return (
@@ -162,7 +162,7 @@ export function AccountSheet() {
               </Pressable>
             );
           })}
-        </BottomSheetView>
+        </View>
         <Pressable onPress={onSubmit} style={styles.create}>
           <Text style={styles.createText}>{editingId ? 'Сохранить' : 'Создать'}</Text>
         </Pressable>

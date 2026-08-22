@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  LayoutAnimation,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useFocusEffect } from 'expo-router';
 import { FlashList } from '@shopify/flash-list';
 
@@ -24,7 +25,7 @@ import { useDataStore } from '@stores/data.store';
 import { formatMonth, shiftMonth, useHistoryStore } from '@stores/history.store';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
-import { numberTextStyle, Radius, Spacing, textProps, Typography } from '@theme';
+import { numberTextStyle, Radius, Spacing, TAB_BAR_HEIGHT, textProps, Typography } from '@theme';
 import { hexToRgba } from '@utils/color';
 import { monthPrefix, todayLocalDay } from '@utils/date';
 import { hapticLight } from '@utils/haptics';
@@ -37,6 +38,7 @@ type Row = { type: 'header'; day: string; net: number } | { type: 'tx'; tx: Tran
 export function HistoryScreen() {
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
+  const insets = useSafeAreaInsets();
 
   const month = useHistoryStore((s) => s.month);
   const setMonth = useHistoryStore((s) => s.setMonth);
@@ -136,12 +138,10 @@ export function HistoryScreen() {
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const y = e.nativeEvent.contentOffset.y;
-    // Hysteresis so it doesn't flicker right at the threshold.
+    // Hysteresis so it doesn't flip-flop right at the threshold. The crossfade
+    // + height morph is handled by the reanimated layout animations below.
     const next = collapsed ? y > 24 : y > 56;
-    if (next !== collapsed) {
-      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-      setCollapsed(next);
-    }
+    if (next !== collapsed) setCollapsed(next);
   };
 
   // Clamp navigation: no future months, and no earlier than the first data month.
@@ -229,42 +229,54 @@ export function HistoryScreen() {
       </View>
 
       {outcome > 0 && catSegments.length > 0 && (
-        <View style={styles.topBlock}>
+        <Animated.View layout={LinearTransition.duration(240)} style={styles.topBlock}>
           <Text {...textProps('micro')} style={styles.sectionTitle}>
             КАТЕГОРИИ ТРАТ
           </Text>
           {collapsed ? (
-            <View style={styles.segBar}>
+            <Animated.View
+              key="seg"
+              entering={FadeIn.duration(220)}
+              exiting={FadeOut.duration(140)}
+              style={styles.segBar}
+            >
               {catSegments.map((s) => (
                 <View key={s.key} style={{ flex: s.minor, backgroundColor: s.color }} />
               ))}
-            </View>
+            </Animated.View>
           ) : (
-            topCategories.map((tc) => {
-              const cat = tc.categoryId ? categoryById[tc.categoryId] : undefined;
-              const frac = maxTop > 0 ? tc.totalMinor / maxTop : 0;
-              return (
-                <View key={tc.categoryId ?? 'none'} style={styles.barRow}>
-                  <View style={styles.barIcon}>
-                    <AppIcon name={cat?.icon} color={cat?.color ?? palette.dim} size={18} />
+            <Animated.View
+              key="rows"
+              entering={FadeIn.duration(220)}
+              exiting={FadeOut.duration(140)}
+              style={styles.barRows}
+            >
+              {topCategories.map((tc) => {
+                const cat = tc.categoryId ? categoryById[tc.categoryId] : undefined;
+                const frac = maxTop > 0 ? tc.totalMinor / maxTop : 0;
+                return (
+                  <View key={tc.categoryId ?? 'none'} style={styles.barRow}>
+                    <View style={styles.barIcon}>
+                      <AppIcon name={cat?.icon} color={cat?.color ?? palette.dim} size={18} />
+                    </View>
+                    <View style={styles.barTrack}>
+                      <View
+                        style={[
+                          styles.barFill,
+                          {
+                            width: `${Math.max(6, frac * 100)}%`,
+                            backgroundColor: cat?.color ?? palette.dim,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Money minor={tc.totalMinor} currency={base} style={styles.barValue} />
                   </View>
-                  <View style={styles.barTrack}>
-                    <View
-                      style={[
-                        styles.barFill,
-                        {
-                          width: `${Math.max(6, frac * 100)}%`,
-                          backgroundColor: cat?.color ?? palette.dim,
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Money minor={tc.totalMinor} currency={base} style={styles.barValue} />
-                </View>
-              );
-            })
+                );
+              })}
+            </Animated.View>
           )}
-        </View>
+        </Animated.View>
       )}
     </View>
   );
@@ -279,7 +291,11 @@ export function HistoryScreen() {
         style={styles.search}
       />
 
-      <View style={styles.filters}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filters}
+      >
         {(
           [
             { id: 'all', label: 'Все' },
@@ -302,7 +318,7 @@ export function HistoryScreen() {
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
 
       <Text {...textProps('micro')} style={styles.sectionTitle}>
         ЗАПИСИ
@@ -327,7 +343,10 @@ export function HistoryScreen() {
           }
           keyExtractor={(row) => (row.type === 'header' ? `h:${row.day}` : `t:${row.tx.id}`)}
           getItemType={(row) => row.type}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={{
+            ...styles.listContent,
+            paddingBottom: insets.bottom + TAB_BAR_HEIGHT + Spacing.md,
+          }}
           renderItem={({ item }) => {
             if (item.type === 'header') {
               return (
@@ -385,7 +404,7 @@ const makeStyles = (p: Palette) =>
   StyleSheet.create({
     canvas: { flex: 1, backgroundColor: p.canvasBase },
     safe: { flex: 1 },
-    listContent: { paddingHorizontal: Spacing.screenPadding, paddingBottom: 140 },
+    listContent: { paddingHorizontal: Spacing.screenPadding },
     monthBar: {
       paddingHorizontal: Spacing.screenPadding,
       paddingTop: Spacing.lg,
@@ -427,7 +446,7 @@ const makeStyles = (p: Palette) =>
       borderRadius: Radius.md,
       backgroundColor: p.glassLightBg,
     },
-    filters: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+    filters: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.sm },
     filterChip: {
       paddingHorizontal: Spacing.lg,
       paddingVertical: Spacing.sm,
@@ -440,6 +459,7 @@ const makeStyles = (p: Palette) =>
     filterText: { color: p.ink, fontSize: Typography.footnote.fontSize },
     filterTextActive: { color: p.btnInk },
     topBlock: { gap: Spacing.sm, marginTop: Spacing.sm },
+    barRows: { gap: Spacing.sm },
     segBar: {
       flexDirection: 'row',
       height: 14,

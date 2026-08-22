@@ -156,6 +156,16 @@ export function HistoryScreen() {
     [month],
   );
 
+  // Pin each day header while its transactions scroll under it (sticky dates).
+  const stickyHeaderIndices = useMemo(
+    () =>
+      rows.reduce<number[]>((acc, r, i) => {
+        if (r.type === 'header') acc.push(i);
+        return acc;
+      }, []),
+    [rows],
+  );
+
   // Pinned above the scrolling list (owner: month bar fixed on scroll).
   const MonthBar = (
     <View style={styles.monthBar}>
@@ -343,6 +353,7 @@ export function HistoryScreen() {
           }
           keyExtractor={(row) => (row.type === 'header' ? `h:${row.day}` : `t:${row.tx.id}`)}
           getItemType={(row) => row.type}
+          stickyHeaderIndices={stickyHeaderIndices}
           contentContainerStyle={{
             ...styles.listContent,
             paddingBottom: insets.bottom + TAB_BAR_HEIGHT + Spacing.md,
@@ -489,8 +500,10 @@ const makeStyles = (p: Palette) =>
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginTop: Spacing.md,
-      marginBottom: Spacing.xs,
+      paddingTop: Spacing.md,
+      paddingBottom: Spacing.xs,
+      // Opaque so the pinned (sticky) day header hides the rows scrolling under it.
+      backgroundColor: p.canvasBase,
     },
     dayLabel: { color: p.dim2 },
     dayTotal: { color: p.dim, fontSize: Typography.caption.fontSize },

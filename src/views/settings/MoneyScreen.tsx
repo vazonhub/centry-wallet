@@ -17,14 +17,14 @@ export function MoneyScreen() {
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const insets = useSafeAreaInsets();
   const baseCurrency = useSettingsStore((s) => s.baseCurrency);
-  const setBaseCurrency = useSettingsStore((s) => s.setBaseCurrency);
   const budgetPlan = useSettingsStore((s) => s.budgetPlan);
   const setBudgetPlan = useSettingsStore((s) => s.setBudgetPlan);
 
   const onBase = (code: string) => {
-    setBaseCurrency(code);
     hapticLight();
-    void DataController.loadAll().then(() => DataController.refreshRates());
+    // Re-bases every transaction's frozen rate to the new base so History and the
+    // allowance stop showing old-base numbers under the new currency code.
+    void DataController.changeBaseCurrency(code);
   };
 
   return (

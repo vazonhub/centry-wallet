@@ -156,6 +156,33 @@ export async function earliestMonth(): Promise<string | null> {
   return row?.m ?? null;
 }
 
+/** Distinct currencies used by non-deleted transactions. */
+export async function distinctTransactionCurrencies(): Promise<string[]> {
+  const db = getDb();
+  const rows = await db.getAllAsync<{ currency: string }>(
+    `SELECT DISTINCT currency FROM transactions WHERE deleted_at IS NULL;`,
+  );
+  return rows.map((r) => r.currency);
+}
+
+/**
+ * Re-freezes the base-conversion rate for every non-deleted transaction of a
+ * currency — used when the user changes the base currency, so all base-currency
+ * views agree. The recorded money (amount_minor/currency) is never touched, only
+ * the derived rate_to_base_e6.
+ */
+export async function rebaseCurrencyRate(
+  currency: string,
+  rateToBaseE6: number,
+  updatedAt: number,
+): Promise<void> {
+  const db = getDb();
+  await db.runAsync(
+    `UPDATE transactions SET rate_to_base_e6 = ?, updated_at = ? WHERE currency = ? AND deleted_at IS NULL;`,
+    [rateToBaseE6, updatedAt, currency],
+  );
+}
+
 /** Account balance in the account's own currency (minor units). */
 export async function accountBalanceMinor(accountId: Id): Promise<number> {
   const db = getDb();

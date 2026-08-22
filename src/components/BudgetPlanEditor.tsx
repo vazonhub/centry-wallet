@@ -102,7 +102,8 @@ const makeStyles = (p: Palette) =>
       fontWeight: '700',
       letterSpacing: 1,
     },
-    amountRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+    // zIndex keeps the currency dropdown's absolute overlay above the preview below.
+    amountRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, zIndex: 20 },
     amountInput: {
       ...numberTextStyle,
       flex: 1,

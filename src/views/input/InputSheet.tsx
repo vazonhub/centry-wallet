@@ -285,10 +285,14 @@ export function InputSheet() {
   return (
     <BottomSheetModal
       ref={inputSheetRef}
-      snapPoints={['75%']}
+      snapPoints={['75%', '95%']}
       enableDynamicSizing={false}
       enablePanDownToClose
-      keyboardBehavior="interactive"
+      // `extend` grows the sheet to its tallest snap point when the keyboard
+      // opens, keeping the amount field (top of the content) visible above the
+      // keyboard. `interactive` instead slid the whole 75% sheet up by the
+      // keyboard height, pushing the amount field off the top of the screen.
+      keyboardBehavior="extend"
       keyboardBlurBehavior="restore"
       backdropComponent={renderBackdrop}
       backgroundStyle={styles.sheetBg}

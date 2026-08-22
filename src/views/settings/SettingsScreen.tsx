@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
@@ -9,7 +9,7 @@ import type { ThemeChoice } from '@constants/settings';
 import { useIsDark, usePalette } from '@hooks/usePalette';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
-import { Radius, ScreenTitle, Spacing, textProps, Typography } from '@theme';
+import { Radius, ScreenTitle, Spacing, TAB_BAR_HEIGHT, textProps, Typography } from '@theme';
 import { hapticLight } from '@utils/haptics';
 
 const THEME_VALUES: ThemeChoice[] = ['system', 'light', 'dark'];
@@ -29,6 +29,7 @@ export function SettingsScreen() {
   const palette = usePalette();
   const isDark = useIsDark();
   const styles = useMemo(() => makeStyles(palette), [palette]);
+  const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const theme = useSettingsStore((s) => s.theme);
@@ -41,7 +42,13 @@ export function SettingsScreen() {
         <Text {...textProps('title')} style={styles.screenTitle}>
           Настройки
         </Text>
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.scroll,
+            { paddingBottom: insets.bottom + TAB_BAR_HEIGHT + Spacing.md },
+          ]}
+        >
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>ТЕМА</Text>
             <SegmentedControl
@@ -94,7 +101,7 @@ const makeStyles = (p: Palette) =>
       paddingTop: Spacing.lg,
       paddingBottom: Spacing.md,
     },
-    scroll: { paddingHorizontal: Spacing.screenPadding, paddingBottom: 140, gap: Spacing.xl },
+    scroll: { paddingHorizontal: Spacing.screenPadding, gap: Spacing.xl },
     section: { gap: Spacing.md },
     // Section headers align to the same left margin as the screen title
     // (they sit inside the scroll's screenPadding — no extra inset).

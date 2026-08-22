@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useFocusEffect } from 'expo-router';
 import { FlashList } from '@shopify/flash-list';
 
@@ -15,7 +25,7 @@ import { useDataStore } from '@stores/data.store';
 import { formatMonth, shiftMonth, useHistoryStore } from '@stores/history.store';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
-import { numberTextStyle, Radius, Spacing, textProps, Typography } from '@theme';
+import { numberTextStyle, Radius, Spacing, TAB_BAR_HEIGHT, textProps, Typography } from '@theme';
 import { hexToRgba } from '@utils/color';
 import { monthPrefix, todayLocalDay } from '@utils/date';
 import { hapticLight } from '@utils/haptics';
@@ -28,6 +38,7 @@ type Row = { type: 'header'; day: string; net: number } | { type: 'tx'; tx: Tran
 export function HistoryScreen() {
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
+  const insets = useSafeAreaInsets();
 
   const month = useHistoryStore((s) => s.month);
   const setMonth = useHistoryStore((s) => s.setMonth);
@@ -48,6 +59,8 @@ export function HistoryScreen() {
 
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
+  // Collapse the per-category bars into one segmented bar once the feed scrolls.
+  const [collapsed, setCollapsed] = useState(false);
 
   // Reload the visible month whenever it changes or the screen refocuses
   // (data may have changed via the input sheet).
@@ -107,6 +120,30 @@ export function HistoryScreen() {
 
   const maxTop = topCategories.reduce((m, c) => Math.max(m, c.totalMinor), 0);
 
+  // Segments for the collapsed single bar: each top category by share of the
+  // month's spend, plus a neutral "прочее" remainder (iOS Files storage style).
+  const catSegments = useMemo(() => {
+    const segs = topCategories
+      .filter((tc) => tc.totalMinor > 0)
+      .map((tc) => ({
+        key: tc.categoryId ?? 'none',
+        color: (tc.categoryId ? categoryById[tc.categoryId]?.color : undefined) ?? palette.dim,
+        minor: tc.totalMinor,
+      }));
+    const sumTop = segs.reduce((s, x) => s + x.minor, 0);
+    const other = outcome - sumTop;
+    if (other > 0) segs.push({ key: 'other', color: palette.dim2, minor: other });
+    return segs;
+  }, [topCategories, categoryById, outcome, palette]);
+
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = e.nativeEvent.contentOffset.y;
+    // Hysteresis so it doesn't flip-flop right at the threshold. The crossfade
+    // + height morph is handled by the reanimated layout animations below.
+    const next = collapsed ? y > 24 : y > 56;
+    if (next !== collapsed) setCollapsed(next);
+  };
+
   // Clamp navigation: no future months, and no earlier than the first data month.
   const currentMonth = monthPrefix(todayLocalDay());
   const canNext = month < currentMonth;
@@ -144,8 +181,10 @@ export function HistoryScreen() {
     </View>
   );
 
-  const Header = (
-    <View style={styles.header}>
+  // Fixed above the scrolling list: month totals + category graphics. On scroll
+  // the per-category bars collapse into one proportional segmented bar.
+  const FixedStats = (
+    <View style={styles.fixedStats}>
       <View style={styles.totals}>
         <View style={styles.totalCard}>
           <Text {...textProps('caption')} style={styles.totalLabel}>
@@ -154,8 +193,10 @@ export function HistoryScreen() {
           <Money
             minor={income}
             currency={base}
-            options={{ hideCode: true }}
             style={styles.totalPos}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
           />
         </View>
         <View style={styles.totalCard}>
@@ -165,8 +206,10 @@ export function HistoryScreen() {
           <Money
             minor={outcome}
             currency={base}
-            options={{ hideCode: true }}
             style={styles.totalNeg}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
           />
         </View>
         <View style={styles.totalCard}>
@@ -176,12 +219,70 @@ export function HistoryScreen() {
           <Money
             minor={income - outcome}
             currency={base}
-            options={{ showPlus: true, hideCode: true }}
+            options={{ showPlus: true }}
             style={[styles.totalDiff, { color: income - outcome >= 0 ? palette.pos : palette.neg }]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
           />
         </View>
       </View>
 
+      {outcome > 0 && catSegments.length > 0 && (
+        <Animated.View layout={LinearTransition.duration(240)} style={styles.topBlock}>
+          <Text {...textProps('micro')} style={styles.sectionTitle}>
+            КАТЕГОРИИ ТРАТ
+          </Text>
+          {collapsed ? (
+            <Animated.View
+              key="seg"
+              entering={FadeIn.duration(220)}
+              exiting={FadeOut.duration(140)}
+              style={styles.segBar}
+            >
+              {catSegments.map((s) => (
+                <View key={s.key} style={{ flex: s.minor, backgroundColor: s.color }} />
+              ))}
+            </Animated.View>
+          ) : (
+            <Animated.View
+              key="rows"
+              entering={FadeIn.duration(220)}
+              exiting={FadeOut.duration(140)}
+              style={styles.barRows}
+            >
+              {topCategories.map((tc) => {
+                const cat = tc.categoryId ? categoryById[tc.categoryId] : undefined;
+                const frac = maxTop > 0 ? tc.totalMinor / maxTop : 0;
+                return (
+                  <View key={tc.categoryId ?? 'none'} style={styles.barRow}>
+                    <View style={styles.barIcon}>
+                      <AppIcon name={cat?.icon} color={cat?.color ?? palette.dim} size={18} />
+                    </View>
+                    <View style={styles.barTrack}>
+                      <View
+                        style={[
+                          styles.barFill,
+                          {
+                            width: `${Math.max(6, frac * 100)}%`,
+                            backgroundColor: cat?.color ?? palette.dim,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Money minor={tc.totalMinor} currency={base} style={styles.barValue} />
+                  </View>
+                );
+              })}
+            </Animated.View>
+          )}
+        </Animated.View>
+      )}
+    </View>
+  );
+
+  const Header = (
+    <View style={styles.header}>
       <TextInput
         value={query}
         onChangeText={setQuery}
@@ -190,7 +291,11 @@ export function HistoryScreen() {
         style={styles.search}
       />
 
-      <View style={styles.filters}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filters}
+      >
         {(
           [
             { id: 'all', label: 'Все' },
@@ -213,38 +318,7 @@ export function HistoryScreen() {
             </Pressable>
           );
         })}
-      </View>
-
-      {outcome > 0 && topCategories.length > 0 && (
-        <View style={styles.topBlock}>
-          <Text {...textProps('micro')} style={styles.sectionTitle}>
-            КАТЕГОРИИ ТРАТ
-          </Text>
-          {topCategories.map((tc) => {
-            const cat = tc.categoryId ? categoryById[tc.categoryId] : undefined;
-            const frac = maxTop > 0 ? tc.totalMinor / maxTop : 0;
-            return (
-              <View key={tc.categoryId ?? 'none'} style={styles.barRow}>
-                <View style={styles.barIcon}>
-                  <AppIcon name={cat?.icon} color={cat?.color ?? palette.dim} size={18} />
-                </View>
-                <View style={styles.barTrack}>
-                  <View
-                    style={[
-                      styles.barFill,
-                      {
-                        width: `${Math.max(6, frac * 100)}%`,
-                        backgroundColor: cat?.color ?? palette.dim,
-                      },
-                    ]}
-                  />
-                </View>
-                <Money minor={tc.totalMinor} currency={base} style={styles.barValue} />
-              </View>
-            );
-          })}
-        </View>
-      )}
+      </ScrollView>
 
       <Text {...textProps('micro')} style={styles.sectionTitle}>
         ЗАПИСИ
@@ -256,8 +330,11 @@ export function HistoryScreen() {
     <View style={styles.canvas}>
       <SafeAreaView style={styles.safe} edges={['top']}>
         {MonthBar}
+        {FixedStats}
         <FlashList
           data={rows}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
           ListHeaderComponent={Header}
           ListEmptyComponent={
             <Text {...textProps('footnote')} style={styles.empty}>
@@ -266,7 +343,10 @@ export function HistoryScreen() {
           }
           keyExtractor={(row) => (row.type === 'header' ? `h:${row.day}` : `t:${row.tx.id}`)}
           getItemType={(row) => row.type}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={{
+            ...styles.listContent,
+            paddingBottom: insets.bottom + TAB_BAR_HEIGHT + Spacing.md,
+          }}
           renderItem={({ item }) => {
             if (item.type === 'header') {
               return (
@@ -324,7 +404,7 @@ const makeStyles = (p: Palette) =>
   StyleSheet.create({
     canvas: { flex: 1, backgroundColor: p.canvasBase },
     safe: { flex: 1 },
-    listContent: { paddingHorizontal: Spacing.screenPadding, paddingBottom: 140 },
+    listContent: { paddingHorizontal: Spacing.screenPadding },
     monthBar: {
       paddingHorizontal: Spacing.screenPadding,
       paddingTop: Spacing.lg,
@@ -332,6 +412,13 @@ const makeStyles = (p: Palette) =>
       backgroundColor: p.canvasBase,
     },
     header: { gap: Spacing.md, paddingTop: Spacing.sm },
+    fixedStats: {
+      paddingHorizontal: Spacing.screenPadding,
+      paddingTop: Spacing.sm,
+      paddingBottom: Spacing.sm,
+      gap: Spacing.md,
+      backgroundColor: p.canvasBase,
+    },
     monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     navBtn: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.xs },
     navArrow: { color: p.ink, fontSize: 28, fontWeight: '400' },
@@ -359,7 +446,7 @@ const makeStyles = (p: Palette) =>
       borderRadius: Radius.md,
       backgroundColor: p.glassLightBg,
     },
-    filters: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+    filters: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.sm },
     filterChip: {
       paddingHorizontal: Spacing.lg,
       paddingVertical: Spacing.sm,
@@ -372,6 +459,15 @@ const makeStyles = (p: Palette) =>
     filterText: { color: p.ink, fontSize: Typography.footnote.fontSize },
     filterTextActive: { color: p.btnInk },
     topBlock: { gap: Spacing.sm, marginTop: Spacing.sm },
+    barRows: { gap: Spacing.sm },
+    segBar: {
+      flexDirection: 'row',
+      height: 14,
+      borderRadius: Radius.pill,
+      overflow: 'hidden',
+      gap: 2,
+      backgroundColor: p.glassLightBg,
+    },
     barRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
     barIcon: { width: 24, alignItems: 'center' },
     barTrack: {

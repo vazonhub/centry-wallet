@@ -12,10 +12,13 @@ import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-c
 import { useAppBootstrap } from '@hooks/useAppBootstrap';
 import { useNotificationResponse } from '@hooks/useNotificationResponse';
 import { usePendingIntent } from '@hooks/usePendingIntent';
-import { useIsDark } from '@hooks/usePalette';
+import { useIsDark, usePalette } from '@hooks/usePalette';
 import { useWidgetDeepLink } from '@hooks/useWidgetDeepLink';
+import { AccountSheet } from '@components/AccountSheet';
+import { BudgetSheet } from '@components/BudgetSheet';
 import { CategoryEditorSheet } from '@components/CategoryEditorSheet';
 import { TransactionDetailSheet } from '@components/TransactionDetailSheet';
+import { WalletTotalSheet } from '@components/WalletTotalSheet';
 import { InputSheet } from '@views/input/InputSheet';
 import { OnboardingScreen } from '@views/onboarding/OnboardingScreen';
 
@@ -28,31 +31,46 @@ export const unstable_settings = {
 };
 
 export default function RootLayout() {
-  // Bootstrap runs as a background side-effect. We DO NOT gate rendering on it —
-  // the UI always renders (empty state until data loads), so a slow/failed
-  // bootstrap can never leave a blank screen.
-  useAppBootstrap();
+  // Gate the app tree on bootstrap readiness. `ready` is ALWAYS set — even if
+  // bootstrap throws (see useAppBootstrap's `finally`) — so this can never leave
+  // a permanent blank screen; it only holds the native splash for the few ms of
+  // local SQLite load. Mounting the screens only after the data store is
+  // populated makes them read accounts/categories on their FIRST render, fixing
+  // the bug where the initial async setSnapshot landed in the mount→subscribe
+  // race window and data stayed empty until an unrelated interaction (opening a
+  // picker/modal) forced a re-commit.
+  const { ready } = useAppBootstrap();
   useWidgetDeepLink();
   useNotificationResponse();
   usePendingIntent();
   const isDark = useIsDark();
+  const palette = usePalette();
 
   useEffect(() => {
-    const id = setTimeout(() => void SplashScreen.hideAsync(), 0);
-    return () => clearTimeout(id);
-  }, []);
+    if (ready) void SplashScreen.hideAsync();
+  }, [ready]);
 
   return (
-    <GestureHandlerRootView style={styles.root}>
+    // The root is painted with the theme canvas so no white flashes through
+    // during native navigation when the system scheme differs from the app's
+    // (light system + dark app). Mirrors the Bsuir Time root-background fix.
+    <GestureHandlerRootView style={[styles.root, { backgroundColor: palette.canvasBase }]}>
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <BottomSheetModalProvider>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
-          </Stack>
-          <InputSheet />
-          <CategoryEditorSheet />
-          <TransactionDetailSheet />
-          <OnboardingScreen />
+          {ready && (
+            <>
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="(tabs)" />
+              </Stack>
+              <InputSheet />
+              <AccountSheet />
+              <BudgetSheet />
+              <CategoryEditorSheet />
+              <TransactionDetailSheet />
+              <WalletTotalSheet />
+              <OnboardingScreen />
+            </>
+          )}
           <StatusBar style={isDark ? 'light' : 'dark'} />
         </BottomSheetModalProvider>
       </SafeAreaProvider>

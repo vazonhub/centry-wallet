@@ -61,19 +61,16 @@ describe('buildWidgetSnapshot', () => {
       categories: [category({ id: 'c1', icon: '🍔' })],
       base: 'BYN',
       rates: {},
-      schedule: {
-        frequency: 'monthly',
-        weekday: 5,
-        anchor: null,
-        days: [1],
-        amounts: { '1': { minor: 310_00, currency: 'BYN' } },
-      },
+      plan: { period: 'month', amountMinor: 310_00, currency: 'BYN' },
       todayLocalDay: '2026-08-20',
       now,
     });
 
     expect(snap.currency).toBe('BYN');
     expect(snap.daysLeft).toBe(12);
+    // Plan 310.00 BYN, one 12.00 expense this period → 298.00 still spendable.
+    expect(snap.periodRemainingMinor).toBe(298_00);
+    expect(snap.periodLabel).toBe('месяц');
     expect(snap.accounts).toEqual([{ name: 'Карта BYN', balanceMinor: 340_20, currency: 'BYN' }]);
     expect(snap.recent).toEqual([
       { icon: '🍔', note: 'Обед', amountMinor: -12_00, currency: 'BYN' },
@@ -94,13 +91,7 @@ describe('buildWidgetSnapshot', () => {
       categories: [category({ id: 'c1', name: 'Еда', icon: '🍔' })],
       base: 'BYN',
       rates: {},
-      schedule: {
-        frequency: 'monthly',
-        weekday: 5,
-        anchor: null,
-        days: [1],
-        amounts: { '1': { minor: 310_00, currency: 'BYN' } },
-      },
+      plan: { period: 'month', amountMinor: 310_00, currency: 'BYN' },
       todayLocalDay: '2026-08-20',
       now,
     });

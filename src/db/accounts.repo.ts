@@ -99,18 +99,21 @@ export async function renameAccount(id: Id, name: string, updatedAt: number): Pr
 }
 
 /**
- * Edits an account's display fields. Currency is intentionally NOT editable —
- * changing it would break balances/history computed in the account's currency.
+ * Edits an account's display fields plus its opening balance. Currency is
+ * intentionally NOT editable — changing it would break balances/history computed
+ * in the account's currency. `opening_minor` is the account's starting amount
+ * (in its own currency), editable so a freshly added account can carry the money
+ * the user already had.
  */
 export async function updateAccount(
   id: Id,
-  fields: { name: string; kind: AccountKind; icon: string | null },
+  fields: { name: string; kind: AccountKind; icon: string | null; openingMinor: number },
   updatedAt: number,
 ): Promise<void> {
   const db = getDb();
   await db.runAsync(
-    `UPDATE accounts SET name = ?, kind = ?, icon = ?, updated_at = ? WHERE id = ?;`,
-    [fields.name, fields.kind, fields.icon, updatedAt, id],
+    `UPDATE accounts SET name = ?, kind = ?, icon = ?, opening_minor = ?, updated_at = ? WHERE id = ?;`,
+    [fields.name, fields.kind, fields.icon, fields.openingMinor, updatedAt, id],
   );
 }
 

@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { ScheduleEditor } from '@components/ScheduleEditor';
+import { BudgetPlanEditor } from '@components/BudgetPlanEditor';
 import { usePalette } from '@hooks/usePalette';
 import { useSettingsStore, waitForSettingsHydration } from '@stores/settings.store';
 import type { Palette } from '@theme';
 import { Radius, ScreenTitle, Spacing, Typography } from '@theme';
+import { type BudgetPlan, defaultBudgetPlan } from '@utils/budget';
 import { hapticLight, hapticSuccess } from '@utils/haptics';
-import { defaultSchedule, type PayoutSchedule } from '@utils/schedule';
 
 /**
  * Optional, always-skippable first-launch card (B11): sets up the payout
@@ -22,11 +22,11 @@ export function OnboardingScreen() {
 
   const onboardingDone = useSettingsStore((s) => s.onboardingDone);
   const baseCurrency = useSettingsStore((s) => s.baseCurrency);
-  const setPayoutSchedule = useSettingsStore((s) => s.setPayoutSchedule);
+  const setBudgetPlan = useSettingsStore((s) => s.setBudgetPlan);
   const completeOnboarding = useSettingsStore((s) => s.completeOnboarding);
 
   const [hydrated, setHydrated] = useState(false);
-  const [schedule, setSchedule] = useState<PayoutSchedule>(() => defaultSchedule());
+  const [plan, setPlan] = useState<BudgetPlan>(() => defaultBudgetPlan(baseCurrency));
 
   useEffect(() => {
     void waitForSettingsHydration().then(() => setHydrated(true));
@@ -35,7 +35,7 @@ export function OnboardingScreen() {
   if (!hydrated || onboardingDone) return null;
 
   const onStart = () => {
-    setPayoutSchedule(schedule);
+    setBudgetPlan(plan);
     completeOnboarding();
     hapticSuccess();
   };
@@ -52,11 +52,11 @@ export function OnboardingScreen() {
           <Text style={styles.title}>Добро пожаловать в Centry</Text>
           <Text style={styles.lead}>
             Centry показывает одну цифру — сколько можно потратить сегодня. Она считается просто:
-            ожидаемая выплата делится на дни периода до следующей выплаты. Настройте выплату — это
+            запланированный бюджет делится на дни периода (неделя или месяц). Задайте план — это
             всегда можно изменить позже.
           </Text>
 
-          <ScheduleEditor value={schedule} onChange={setSchedule} baseCurrency={baseCurrency} />
+          <BudgetPlanEditor value={plan} onChange={setPlan} baseCurrency={baseCurrency} />
         </ScrollView>
 
         <View style={styles.actions}>

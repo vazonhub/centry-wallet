@@ -31,7 +31,7 @@
           "backgroundColor": "#faf3e4",
           "dark": {
             "image": "./assets/logo-night-theme.png",
-            "backgroundColor": "#000e49"
+            "backgroundColor": "#000000"
           }
         }
       ],

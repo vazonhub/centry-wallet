@@ -190,6 +190,27 @@ export function sanitizeAmountInput(input: string, currency: string): string {
   return intPart + sep + frac;
 }
 
+/**
+ * Renders minor units as a plain, ungrouped editable string for an amount field
+ * (e.g. 123456 in USD → "1234.56"). The inverse of {@link parseAmountToMinor},
+ * used to pre-fill an editable field (e.g. an account's starting balance).
+ * Returns '' for zero so the field shows its placeholder.
+ */
+export function minorToAmountInput(minor: number, currency: string): string {
+  if (minor === 0) return '';
+  const units = getMinorUnits(currency);
+  const negative = minor < 0;
+  const digits = String(Math.abs(minor));
+  let out: string;
+  if (units === 0) {
+    out = digits;
+  } else {
+    const padded = digits.padStart(units + 1, '0');
+    out = padded.slice(0, -units) + '.' + padded.slice(-units);
+  }
+  return negative ? '-' + out : out;
+}
+
 /** Placeholder for an amount field, e.g. "0,00" (integer + fraction shape). */
 export function amountPlaceholder(currency: string): string {
   const units = getMinorUnits(currency);

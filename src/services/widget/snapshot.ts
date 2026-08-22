@@ -1,5 +1,5 @@
 import type { Account, Category, Transaction } from '@models';
-import type { PayoutSchedule } from '@utils/schedule';
+import { type BudgetPlan, periodLabel } from '@utils/budget';
 import { computeAllowance } from '@utils/summary';
 
 /**
@@ -30,10 +30,14 @@ export interface WidgetSnapshot {
   perDayMinor: number;
   /** Base currency code (widget formats with it). */
   currency: string;
-  /** Whole days until the next payday (≥ 1). */
+  /** Whole days remaining in the period (≥ 1). */
   daysLeft: number;
   /** Base-minor spent today. */
   todaySpentMinor: number;
+  /** Base-minor still spendable for the whole period (plan − period spend). */
+  periodRemainingMinor: number;
+  /** Human period label for the widget, e.g. "месяц" / "неделя". */
+  periodLabel: string;
   accounts: WidgetAccountSnapshot[];
   recent: WidgetRecentSnapshot[];
   /** Epoch seconds when this snapshot was built. */
@@ -46,10 +50,10 @@ export interface BuildSnapshotInput {
   recent: Transaction[];
   categories: Category[];
   base: string;
-  /** currency → rate to base ×1e6 (to convert a foreign payout). */
+  /** currency → rate to base ×1e6 (to convert a foreign plan amount). */
   rates: Record<string, number>;
-  /** Recurring payout schedule (B21). */
-  schedule: PayoutSchedule;
+  /** Planned spend for the current period (calendar week/month). */
+  plan: BudgetPlan;
   todayLocalDay: string;
   now: Date;
 }
@@ -68,14 +72,16 @@ function rowNote(t: Transaction, category: Category | undefined): string {
 
 /** Builds the widget snapshot from the current data store slice. Pure. */
 export function buildWidgetSnapshot(input: BuildSnapshotInput): WidgetSnapshot {
-  const { perDayMinor, todaySpentMinor, daysLeft } = computeAllowance({
-    schedule: input.schedule,
-    recent: input.recent,
-    base: input.base,
-    rates: input.rates,
-    todayLocalDay: input.todayLocalDay,
-    now: input.now,
-  });
+  const { perDayMinor, todaySpentMinor, daysLeft, expectedBaseMinor, periodSpentMinor } =
+    computeAllowance({
+      plan: input.plan,
+      recent: input.recent,
+      base: input.base,
+      rates: input.rates,
+      todayLocalDay: input.todayLocalDay,
+      now: input.now,
+    });
+  const periodRemainingMinor = Math.max(0, expectedBaseMinor - periodSpentMinor);
 
   const categoryById = new Map(input.categories.map((c) => [c.id, c]));
 
@@ -100,6 +106,8 @@ export function buildWidgetSnapshot(input: BuildSnapshotInput): WidgetSnapshot {
     currency: input.base,
     daysLeft,
     todaySpentMinor,
+    periodRemainingMinor,
+    periodLabel: periodLabel(input.plan.period),
     accounts,
     recent,
     updatedAt: Math.floor(input.now.getTime() / 1000),

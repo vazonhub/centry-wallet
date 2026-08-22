@@ -1,14 +1,13 @@
 import type { Transaction } from '@models';
 
+import { type BudgetPlan } from '../budget';
 import { computeAllowance } from '../summary';
-import type { PayoutSchedule, PayoutSlotValue } from '../schedule';
 
-const monthly = (day: number, amounts: Record<string, PayoutSlotValue> = {}): PayoutSchedule => ({
-  frequency: 'monthly',
-  weekday: 5,
-  anchor: null,
-  days: [day],
-  amounts,
+const plan = (over: Partial<BudgetPlan> = {}): BudgetPlan => ({
+  period: 'month',
+  amountMinor: 0,
+  currency: 'BYN',
+  ...over,
 });
 
 const tx = (over: Partial<Transaction> = {}): Transaction => ({
@@ -31,13 +30,13 @@ const tx = (over: Partial<Transaction> = {}): Transaction => ({
 });
 
 describe('computeAllowance — "можно сегодня" (shared by home + widget)', () => {
-  // Fixed clock: 2026-08-20, payday on the 1st → period started 2026-08-01.
+  // Fixed clock: 2026-08-20 (August has 31 days; day-of-month 20).
   const now = new Date(2026, 7, 20);
 
-  it('daily limit = expected payout ÷ days in period (B21)', () => {
+  it('daily limit = planned spend ÷ days in the calendar period', () => {
     const a = computeAllowance({
-      // 2026-08 period is 01→09-01 = 31 days; payout 310.00 → 10.00/day.
-      schedule: monthly(1, { '1': { minor: 310_00, currency: 'BYN' } }),
+      // Month plan 310.00 BYN over 31 days → 10.00/day.
+      plan: plan({ period: 'month', amountMinor: 310_00, currency: 'BYN' }),
       recent: [
         tx({ id: 't1', localDay: '2026-08-20', amountMinor: -3_00 }),
         tx({ id: 't2', localDay: '2026-08-10', amountMinor: -7_00 }),
@@ -49,18 +48,36 @@ describe('computeAllowance — "можно сегодня" (shared by home + wid
     });
 
     expect(a.daysInPeriod).toBe(31);
-    expect(a.daysLeft).toBe(12); // 2026-08-20 → next payday 2026-09-01
+    expect(a.daysLeft).toBe(12); // 31 − 20 + 1
     expect(a.perDayMinor).toBe(10_00); // 310.00 / 31
     expect(a.todaySpentMinor).toBe(3_00); // only the 2026-08-20 expense
+    expect(a.periodSpentMinor).toBe(10_00); // both August expenses
+    expect(a.periodStartLocalDay).toBe('2026-08-01');
     expect(a.configured).toBe(true);
-    // carry = perDay(1000) × elapsed(19 days since 08-01) − periodSpent(1000)
-    expect(a.carryMinor).toBe(10_00 * 19 - 10_00);
+    // carry = perDay(1000) × elapsed(20) − periodSpent(1000)
+    expect(a.carryMinor).toBe(10_00 * 20 - 10_00);
   });
 
-  it('converts a foreign-currency payout to base via its rate', () => {
+  it('spreads a weekly plan across 7 days from Monday', () => {
+    // 2026-08-20 is a Thursday → since Monday = 3, elapsed 4, daysLeft 4.
     const a = computeAllowance({
-      // Payout 100.00 USD, 1 USD = 3.00 BYN → 300.00 BYN over 31 days.
-      schedule: monthly(1, { '1': { minor: 100_00, currency: 'USD' } }),
+      plan: plan({ period: 'week', amountMinor: 70_00, currency: 'BYN' }),
+      recent: [],
+      base: 'BYN',
+      rates: {},
+      todayLocalDay: '2026-08-20',
+      now,
+    });
+    expect(a.daysInPeriod).toBe(7);
+    expect(a.daysLeft).toBe(4);
+    expect(a.perDayMinor).toBe(10_00); // 70.00 / 7
+    expect(a.periodStartLocalDay).toBe('2026-08-17'); // Monday
+  });
+
+  it('converts a foreign-currency plan to base via its rate', () => {
+    const a = computeAllowance({
+      // Plan 100.00 USD, 1 USD = 3.00 BYN → 300.00 BYN over 31 days.
+      plan: plan({ period: 'month', amountMinor: 100_00, currency: 'USD' }),
       recent: [],
       base: 'BYN',
       rates: { USD: 3_000_000 },
@@ -68,12 +85,13 @@ describe('computeAllowance — "можно сегодня" (shared by home + wid
       now,
     });
     expect(a.configured).toBe(true);
+    expect(a.expectedBaseMinor).toBe(300_00);
     expect(a.perDayMinor).toBe(9_67); // trunc(300.00 / 31)
   });
 
-  it('is unconfigured with a zero limit when no payout is set', () => {
+  it('is unconfigured with a zero limit when no plan is set', () => {
     const a = computeAllowance({
-      schedule: monthly(1),
+      plan: plan({ amountMinor: 0 }),
       recent: [tx({ amountMinor: -3_00 })],
       base: 'BYN',
       rates: {},
@@ -87,7 +105,7 @@ describe('computeAllowance — "можно сегодня" (shared by home + wid
 
   it('excludes transfers and income from today-spent', () => {
     const a = computeAllowance({
-      schedule: monthly(1, { '1': { minor: 310_00, currency: 'BYN' } }),
+      plan: plan({ amountMinor: 310_00, currency: 'BYN' }),
       recent: [
         tx({ id: 't1', kind: 'transfer', amountMinor: -50_00, localDay: '2026-08-20' }),
         tx({ id: 't2', kind: 'income', amountMinor: 50_00, localDay: '2026-08-20' }),

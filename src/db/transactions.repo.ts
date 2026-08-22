@@ -120,6 +120,25 @@ export async function updateTransactionMeta(
   await db.runAsync(`UPDATE transactions SET ${sets.join(', ')} WHERE id = ?;`, params);
 }
 
+/**
+ * Corrects a transaction's amount (signed minor units — negative expense,
+ * positive income). The currency and frozen rate are unchanged; only the
+ * magnitude/sign of what was recorded. Not for transfers (their two legs must
+ * stay in sync).
+ */
+export async function updateTransactionAmount(
+  id: Id,
+  amountMinor: number,
+  updatedAt: number,
+): Promise<void> {
+  const db = getDb();
+  await db.runAsync(`UPDATE transactions SET amount_minor = ?, updated_at = ? WHERE id = ?;`, [
+    amountMinor,
+    updatedAt,
+    id,
+  ]);
+}
+
 export async function updateTransactionDate(
   id: Id,
   occurredAt: number,
@@ -156,6 +175,33 @@ export async function earliestMonth(): Promise<string | null> {
   return row?.m ?? null;
 }
 
+/** Distinct currencies used by non-deleted transactions. */
+export async function distinctTransactionCurrencies(): Promise<string[]> {
+  const db = getDb();
+  const rows = await db.getAllAsync<{ currency: string }>(
+    `SELECT DISTINCT currency FROM transactions WHERE deleted_at IS NULL;`,
+  );
+  return rows.map((r) => r.currency);
+}
+
+/**
+ * Re-freezes the base-conversion rate for every non-deleted transaction of a
+ * currency — used when the user changes the base currency, so all base-currency
+ * views agree. The recorded money (amount_minor/currency) is never touched, only
+ * the derived rate_to_base_e6.
+ */
+export async function rebaseCurrencyRate(
+  currency: string,
+  rateToBaseE6: number,
+  updatedAt: number,
+): Promise<void> {
+  const db = getDb();
+  await db.runAsync(
+    `UPDATE transactions SET rate_to_base_e6 = ?, updated_at = ? WHERE currency = ? AND deleted_at IS NULL;`,
+    [rateToBaseE6, updatedAt, currency],
+  );
+}
+
 /** Account balance in the account's own currency (minor units). */
 export async function accountBalanceMinor(accountId: Id): Promise<number> {
   const db = getDb();
@@ -183,6 +229,30 @@ export async function monthTotalsBaseMinor(
     [monthPrefix],
   );
   return { income: row?.income ?? 0, outcome: row?.outcome ?? 0 };
+}
+
+/**
+ * Per-account, per-day net change (own currency, minor units) since a local day,
+ * for the balance-over-time chart. Includes transfers (they move an account's
+ * balance) and every non-deleted amount, mirroring `accountBalanceMinor`.
+ */
+export async function dailyDeltasByAccountSince(
+  sinceLocalDay: string,
+): Promise<{ accountId: string; localDay: string; deltaMinor: number }[]> {
+  const db = getDb();
+  const rows = await db.getAllAsync<{ account_id: string; local_day: string; delta: number }>(
+    `SELECT account_id, local_day, SUM(amount_minor) AS delta
+     FROM transactions
+     WHERE deleted_at IS NULL AND local_day >= ?
+     GROUP BY account_id, local_day
+     ORDER BY local_day ASC;`,
+    [sinceLocalDay],
+  );
+  return rows.map((r) => ({
+    accountId: r.account_id,
+    localDay: r.local_day,
+    deltaMinor: r.delta,
+  }));
 }
 
 /** Top expense categories for a month (base minor units), descending. */

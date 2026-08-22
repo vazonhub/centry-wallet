@@ -1,34 +1,42 @@
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ScheduleEditor } from '@components/ScheduleEditor';
+import { BudgetPlanEditor } from '@components/BudgetPlanEditor';
 import { ScreenHeader } from '@components/ScreenHeader';
 import { COMMON_CURRENCIES } from '@constants/currencies';
 import { DataController } from '@controllers/data.controller';
 import { usePalette } from '@hooks/usePalette';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
-import { Radius, Spacing, Typography } from '@theme';
+import { Radius, Spacing, TAB_BAR_HEIGHT, Typography } from '@theme';
 import { hapticLight } from '@utils/haptics';
 
 export function MoneyScreen() {
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
+  const insets = useSafeAreaInsets();
   const baseCurrency = useSettingsStore((s) => s.baseCurrency);
-  const setBaseCurrency = useSettingsStore((s) => s.setBaseCurrency);
-  const payoutSchedule = useSettingsStore((s) => s.payoutSchedule);
-  const setPayoutSchedule = useSettingsStore((s) => s.setPayoutSchedule);
+  const budgetPlan = useSettingsStore((s) => s.budgetPlan);
+  const setBudgetPlan = useSettingsStore((s) => s.setBudgetPlan);
 
   const onBase = (code: string) => {
-    setBaseCurrency(code);
     hapticLight();
-    void DataController.loadAll().then(() => DataController.refreshRates());
+    // Re-bases every transaction's frozen rate to the new base so History and the
+    // allowance stop showing old-base numbers under the new currency code.
+    void DataController.changeBaseCurrency(code);
   };
 
   return (
     <View style={styles.canvas}>
       <ScreenHeader title="Деньги" />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingBottom: insets.bottom + TAB_BAR_HEIGHT + Spacing.md },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.sectionTitle}>БАЗОВАЯ ВАЛЮТА</Text>
         <View style={styles.chips}>
           {COMMON_CURRENCIES.map((c) => {
@@ -45,15 +53,11 @@ export function MoneyScreen() {
           })}
         </View>
 
-        <Text style={styles.sectionTitle}>ВЫПЛАТА</Text>
-        <ScheduleEditor
-          value={payoutSchedule}
-          onChange={setPayoutSchedule}
-          baseCurrency={baseCurrency}
-        />
+        <Text style={styles.sectionTitle}>ПЛАН БЮДЖЕТА</Text>
+        <BudgetPlanEditor value={budgetPlan} onChange={setBudgetPlan} baseCurrency={baseCurrency} />
         <Text style={styles.hint}>
-          «Можно сегодня» = выплата ÷ дни периода (от выплаты до выплаты). Доход с галочкой
-          «регулярная выплата» обновляет сумму нужного слота.
+          «Можно сегодня» = план ÷ дни периода (календарная неделя или месяц). Это отдельный бюджет
+          — приходы и расходы его не меняют.
         </Text>
       </ScrollView>
     </View>
@@ -63,7 +67,11 @@ export function MoneyScreen() {
 const makeStyles = (p: Palette) =>
   StyleSheet.create({
     canvas: { flex: 1, backgroundColor: p.canvasBase },
-    scroll: { padding: Spacing.screenPadding, gap: Spacing.md },
+    scroll: {
+      paddingTop: Spacing.screenPadding,
+      paddingHorizontal: Spacing.screenPadding,
+      gap: Spacing.md,
+    },
     sectionTitle: {
       color: p.dim,
       fontSize: 13,

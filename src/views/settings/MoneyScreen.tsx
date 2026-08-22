@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScheduleEditor } from '@components/ScheduleEditor';
 import { ScreenHeader } from '@components/ScreenHeader';
@@ -8,12 +9,13 @@ import { DataController } from '@controllers/data.controller';
 import { usePalette } from '@hooks/usePalette';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
-import { Radius, Spacing, Typography } from '@theme';
+import { Radius, Spacing, TAB_BAR_HEIGHT, Typography } from '@theme';
 import { hapticLight } from '@utils/haptics';
 
 export function MoneyScreen() {
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
+  const insets = useSafeAreaInsets();
   const baseCurrency = useSettingsStore((s) => s.baseCurrency);
   const setBaseCurrency = useSettingsStore((s) => s.setBaseCurrency);
   const payoutSchedule = useSettingsStore((s) => s.payoutSchedule);
@@ -28,7 +30,13 @@ export function MoneyScreen() {
   return (
     <View style={styles.canvas}>
       <ScreenHeader title="Деньги" />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingBottom: insets.bottom + TAB_BAR_HEIGHT + Spacing.md },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.sectionTitle}>БАЗОВАЯ ВАЛЮТА</Text>
         <View style={styles.chips}>
           {COMMON_CURRENCIES.map((c) => {
@@ -63,7 +71,11 @@ export function MoneyScreen() {
 const makeStyles = (p: Palette) =>
   StyleSheet.create({
     canvas: { flex: 1, backgroundColor: p.canvasBase },
-    scroll: { padding: Spacing.screenPadding, gap: Spacing.md },
+    scroll: {
+      paddingTop: Spacing.screenPadding,
+      paddingHorizontal: Spacing.screenPadding,
+      gap: Spacing.md,
+    },
     sectionTitle: {
       color: p.dim,
       fontSize: 13,

@@ -1,15 +1,17 @@
 import { useMemo } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '@components/ScreenHeader';
 import { DataController } from '@controllers/data.controller';
 import { usePalette } from '@hooks/usePalette';
 import type { Palette } from '@theme';
-import { Radius, Spacing, Typography } from '@theme';
+import { Radius, Spacing, TAB_BAR_HEIGHT, Typography } from '@theme';
 
 export function DataScreen() {
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
+  const insets = useSafeAreaInsets();
 
   const onDeleteAll = () => {
     Alert.alert('Удалить все данные?', 'Счета, категории и записи будут стёрты. Отменить нельзя.', [
@@ -30,7 +32,13 @@ export function DataScreen() {
   return (
     <View style={styles.canvas}>
       <ScreenHeader title="Данные" />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scroll,
+          { paddingBottom: insets.bottom + TAB_BAR_HEIGHT + Spacing.md },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.card}>
           <Pressable onPress={onExportCsv} style={styles.row}>
             <Text style={styles.label}>Экспорт в CSV</Text>
@@ -50,7 +58,11 @@ export function DataScreen() {
 const makeStyles = (p: Palette) =>
   StyleSheet.create({
     canvas: { flex: 1, backgroundColor: p.canvasBase },
-    scroll: { padding: Spacing.screenPadding, gap: Spacing.md },
+    scroll: {
+      paddingTop: Spacing.screenPadding,
+      paddingHorizontal: Spacing.screenPadding,
+      gap: Spacing.md,
+    },
     card: {
       backgroundColor: p.glassBg,
       borderColor: p.glassBorder,

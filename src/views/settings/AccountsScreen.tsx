@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
@@ -19,7 +20,7 @@ import type { Account } from '@models';
 import { useDataStore } from '@stores/data.store';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
-import { Radius, Spacing, Typography } from '@theme';
+import { Radius, Spacing, TAB_BAR_HEIGHT, Typography } from '@theme';
 import { hapticLight, hapticSuccess } from '@utils/haptics';
 
 const ACCOUNT_KINDS: { kind: Account['kind']; label: string; icon: IoniconName }[] = [
@@ -34,6 +35,7 @@ export function AccountsScreen() {
   const accounts = useDataStore((s) => s.accounts);
   const balances = useDataStore((s) => s.balances);
   const baseCurrency = useSettingsStore((s) => s.baseCurrency);
+  const insets = useSafeAreaInsets();
 
   const sheetRef = useRef<BottomSheetModal>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -79,7 +81,13 @@ export function AccountsScreen() {
   return (
     <View style={styles.canvas}>
       <ScreenHeader title="Счета" />
-      <View style={styles.body}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.body,
+          { paddingBottom: insets.bottom + TAB_BAR_HEIGHT + Spacing.md },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.card}>
           {accounts.map((a) => (
             <Pressable key={a.id} style={styles.row} onPress={() => openEdit(a)}>
@@ -96,7 +104,7 @@ export function AccountsScreen() {
             <Text style={styles.action}>＋ Добавить счёт</Text>
           </Pressable>
         </View>
-      </View>
+      </ScrollView>
 
       <BottomSheetModal
         ref={sheetRef}
@@ -156,7 +164,7 @@ export function AccountsScreen() {
 const makeStyles = (p: Palette) =>
   StyleSheet.create({
     canvas: { flex: 1, backgroundColor: p.canvasBase },
-    body: { padding: Spacing.screenPadding },
+    body: { paddingTop: Spacing.screenPadding, paddingHorizontal: Spacing.screenPadding },
     card: {
       backgroundColor: p.glassBg,
       borderColor: p.glassBorder,

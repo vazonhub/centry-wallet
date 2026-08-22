@@ -1,10 +1,10 @@
 import { useCallback, useMemo } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
 
 import { AppIcon } from '@components/AppIcon';
 import { openAccountSheet } from '@components/accountSheetRef';
+import { openBudgetSheet } from '@components/budgetSheetRef';
 import { openInputSheet } from '@components/inputSheetRef';
 import { openWalletTotal } from '@components/walletTotalRef';
 import { Money } from '@components/Money';
@@ -42,7 +42,6 @@ export function HomeScreen() {
   const palette = usePalette();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(palette), [palette]);
-  const router = useRouter();
 
   const accounts = useDataStore((s) => s.accounts);
   const balances = useDataStore((s) => s.balances);
@@ -120,11 +119,11 @@ export function HomeScreen() {
     return [...map.entries()];
   }, [recent]);
 
-  // Tapping the hero opens the budget-plan settings.
+  // Tapping the hero opens the budget-plan sheet in place (staying on Home).
   const onHeroPress = useCallback(() => {
     hapticLight();
-    router.push('/(tabs)/(settings)/money' as never);
-  }, [router]);
+    openBudgetSheet();
+  }, []);
 
   return (
     <View style={styles.canvas}>

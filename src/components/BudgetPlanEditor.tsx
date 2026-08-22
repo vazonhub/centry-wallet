@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
 
 import { CurrencyDropdown } from '@components/CurrencyDropdown';
@@ -20,6 +21,8 @@ interface Props {
   value: BudgetPlan;
   onChange: (plan: BudgetPlan) => void;
   baseCurrency: string;
+  /** True when rendered inside a bottom sheet (uses BottomSheetTextInput). */
+  insideSheet?: boolean;
 }
 
 const PERIODS: BudgetPeriod[] = ['week', 'month'];
@@ -30,10 +33,13 @@ const PERIOD_LABELS = ['Неделя', 'Месяц'];
  * picks a period (calendar week/month), an amount, and its currency; the daily
  * pace preview is shown in the plan's own currency (plan ÷ days-in-period).
  */
-export function BudgetPlanEditor({ value, onChange, baseCurrency }: Props) {
+export function BudgetPlanEditor({ value, onChange, baseCurrency, insideSheet }: Props) {
   const palette = usePalette();
   const isDark = useIsDark();
   const styles = useMemo(() => makeStyles(palette), [palette]);
+  // BottomSheetTextInput is required inside a bottom sheet, plain TextInput on a
+  // regular screen (rendering BottomSheetTextInput outside a sheet throws).
+  const AmountInput = insideSheet ? BottomSheetTextInput : TextInput;
 
   // Local editable text; the parent holds the parsed minor amount.
   const [amountText, setAmountText] = useState(() =>
@@ -72,7 +78,7 @@ export function BudgetPlanEditor({ value, onChange, baseCurrency }: Props) {
 
       <Text style={styles.label}>СКОЛЬКО ГОТОВ ТРАТИТЬ</Text>
       <View style={styles.amountRow}>
-        <TextInput
+        <AmountInput
           style={styles.amountInput}
           value={amountText}
           onChangeText={setAmount}

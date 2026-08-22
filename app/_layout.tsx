@@ -15,6 +15,7 @@ import { usePendingIntent } from '@hooks/usePendingIntent';
 import { useIsDark, usePalette } from '@hooks/usePalette';
 import { useWidgetDeepLink } from '@hooks/useWidgetDeepLink';
 import { AccountSheet } from '@components/AccountSheet';
+import { BudgetSheet } from '@components/BudgetSheet';
 import { CategoryEditorSheet } from '@components/CategoryEditorSheet';
 import { TransactionDetailSheet } from '@components/TransactionDetailSheet';
 import { WalletTotalSheet } from '@components/WalletTotalSheet';
@@ -63,6 +64,7 @@ export default function RootLayout() {
               </Stack>
               <InputSheet />
               <AccountSheet />
+              <BudgetSheet />
               <CategoryEditorSheet />
               <TransactionDetailSheet />
               <WalletTotalSheet />

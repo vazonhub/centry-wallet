@@ -17,6 +17,7 @@ import { useWidgetDeepLink } from '@hooks/useWidgetDeepLink';
 import { AccountSheet } from '@components/AccountSheet';
 import { CategoryEditorSheet } from '@components/CategoryEditorSheet';
 import { TransactionDetailSheet } from '@components/TransactionDetailSheet';
+import { WalletTotalSheet } from '@components/WalletTotalSheet';
 import { InputSheet } from '@views/input/InputSheet';
 import { OnboardingScreen } from '@views/onboarding/OnboardingScreen';
 
@@ -64,6 +65,7 @@ export default function RootLayout() {
               <AccountSheet />
               <CategoryEditorSheet />
               <TransactionDetailSheet />
+              <WalletTotalSheet />
               <OnboardingScreen />
             </>
           )}

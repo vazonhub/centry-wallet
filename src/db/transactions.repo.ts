@@ -185,6 +185,30 @@ export async function monthTotalsBaseMinor(
   return { income: row?.income ?? 0, outcome: row?.outcome ?? 0 };
 }
 
+/**
+ * Per-account, per-day net change (own currency, minor units) since a local day,
+ * for the balance-over-time chart. Includes transfers (they move an account's
+ * balance) and every non-deleted amount, mirroring `accountBalanceMinor`.
+ */
+export async function dailyDeltasByAccountSince(
+  sinceLocalDay: string,
+): Promise<{ accountId: string; localDay: string; deltaMinor: number }[]> {
+  const db = getDb();
+  const rows = await db.getAllAsync<{ account_id: string; local_day: string; delta: number }>(
+    `SELECT account_id, local_day, SUM(amount_minor) AS delta
+     FROM transactions
+     WHERE deleted_at IS NULL AND local_day >= ?
+     GROUP BY account_id, local_day
+     ORDER BY local_day ASC;`,
+    [sinceLocalDay],
+  );
+  return rows.map((r) => ({
+    accountId: r.account_id,
+    localDay: r.local_day,
+    deltaMinor: r.delta,
+  }));
+}
+
 /** Top expense categories for a month (base minor units), descending. */
 export async function topCategoriesBaseMinor(
   monthPrefix: string,

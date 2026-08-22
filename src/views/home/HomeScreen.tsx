@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { AppIcon } from '@components/AppIcon';
 import { openAccountSheet } from '@components/accountSheetRef';
 import { openInputSheet } from '@components/inputSheetRef';
+import { openWalletTotal } from '@components/walletTotalRef';
 import { Money } from '@components/Money';
 import { openTransactionDetail } from '@components/transactionDetailRef';
 import { EXPENSE_FALLBACK_ICON, INCOME_FALLBACK_ICON, TRANSFER_ICON } from '@constants/icons';
@@ -56,37 +57,39 @@ export function HomeScreen() {
     [categories],
   );
 
-  const { perDayMinor, todaySpent, carry, heroColor, configured, shortfallMinor } = useMemo(() => {
-    const {
-      perDayMinor: budget,
-      todaySpentMinor: spent,
-      carryMinor,
-      configured: isConfigured,
-      expectedBaseMinor,
-      periodSpentMinor,
-    } = computeAllowance({
-      plan: budgetPlan,
-      recent,
-      base,
-      rates,
-      todayLocalDay: todayLocalDay(),
-      now: new Date(),
-    });
-    const usage = budget > 0 ? spent / budget : spent > 0 ? 1 : 0;
-    const color = usage < 0.8 ? palette.pos : usage < 1 ? palette.warn : palette.neg;
-    // "Денег может не хватить": what's still planned to be spent this period vs.
-    // how much money actually exists across all accounts (converted to base).
-    const remainingPlan = Math.max(0, expectedBaseMinor - periodSpentMinor);
-    const available = totalBalanceBaseMinor(accounts, balances, rates, base);
-    return {
-      perDayMinor: budget,
-      todaySpent: spent,
-      carry: carryMinor,
-      heroColor: color,
-      configured: isConfigured,
-      shortfallMinor: isConfigured ? remainingPlan - available : 0,
-    };
-  }, [budgetPlan, recent, base, rates, accounts, balances, palette]);
+  const { perDayMinor, todaySpent, carry, heroColor, configured, shortfallMinor, totalMinor } =
+    useMemo(() => {
+      const {
+        perDayMinor: budget,
+        todaySpentMinor: spent,
+        carryMinor,
+        configured: isConfigured,
+        expectedBaseMinor,
+        periodSpentMinor,
+      } = computeAllowance({
+        plan: budgetPlan,
+        recent,
+        base,
+        rates,
+        todayLocalDay: todayLocalDay(),
+        now: new Date(),
+      });
+      const usage = budget > 0 ? spent / budget : spent > 0 ? 1 : 0;
+      const color = usage < 0.8 ? palette.pos : usage < 1 ? palette.warn : palette.neg;
+      // "Денег может не хватить": what's still planned to be spent this period vs.
+      // how much money actually exists across all accounts (converted to base).
+      const remainingPlan = Math.max(0, expectedBaseMinor - periodSpentMinor);
+      const available = totalBalanceBaseMinor(accounts, balances, rates, base);
+      return {
+        perDayMinor: budget,
+        todaySpent: spent,
+        carry: carryMinor,
+        heroColor: color,
+        configured: isConfigured,
+        shortfallMinor: isConfigured ? remainingPlan - available : 0,
+        totalMinor: available,
+      };
+    }, [budgetPlan, recent, base, rates, accounts, balances, palette]);
 
   const insufficientFunds = configured && shortfallMinor > 0;
 
@@ -124,11 +127,38 @@ export function HomeScreen() {
       <SafeAreaView style={styles.safe} edges={['top']}>
         {/* Fixed top: info card + hero + accounts (only the feed scrolls) */}
         <View style={styles.fixedTop}>
-          {/* Info card above the hero */}
-          <View style={styles.infoRow}>
-            <Text {...textProps('caption')} style={styles.todayLine}>
-              {formatTodayHuman()}
-            </Text>
+          {/* Top row: today (left) + wallet total (right, tappable) */}
+          <View style={styles.topRow}>
+            <View style={styles.todayCard}>
+              <Text {...textProps('caption')} style={styles.todayLine}>
+                {formatTodayHuman()}
+              </Text>
+            </View>
+            <Pressable
+              style={styles.totalCard}
+              onPress={() => {
+                hapticLight();
+                openWalletTotal();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Всего денег и график баланса"
+            >
+              <View style={styles.totalHeader}>
+                <Text {...textProps('micro')} style={styles.totalLabel}>
+                  ВСЕГО
+                </Text>
+                <AppIcon name="stats-chart" color={palette.dim} size={14} />
+              </View>
+              <Money
+                minor={totalMinor}
+                currency={base}
+                options={{ hideCode: true }}
+                style={styles.totalValue}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.6}
+              />
+            </Pressable>
           </View>
 
           {/* Hero block */}
@@ -188,8 +218,12 @@ export function HomeScreen() {
             </View>
           </Pressable>
 
-          {/* Account blocks */}
-          <View style={styles.chipsWrap}>
+          {/* Account blocks — horizontal scroll, add button at the end */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsRow}
+          >
             {accounts.map((a) => (
               <Pressable
                 key={a.id}
@@ -212,7 +246,7 @@ export function HomeScreen() {
             <Pressable style={styles.addChip} onPress={() => openAccountSheet()}>
               <Text style={styles.addChipText}>＋ Счёт</Text>
             </Pressable>
-          </View>
+          </ScrollView>
         </View>
 
         {/* Feed — floating day labels; each entry is its own category-tinted card */}
@@ -312,10 +346,10 @@ const makeStyles = (p: Palette) =>
       paddingBottom: 170,
       gap: Spacing.cardGap,
     },
-    infoRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
+    topRow: { flexDirection: 'row', gap: Spacing.sm },
+    todayCard: {
+      flex: 1,
+      justifyContent: 'center',
       backgroundColor: p.glassBg,
       borderColor: p.glassBorder,
       borderWidth: StyleSheet.hairlineWidth,
@@ -324,6 +358,19 @@ const makeStyles = (p: Palette) =>
       paddingHorizontal: Spacing.lg,
     },
     todayLine: { color: p.dim, textTransform: 'capitalize' },
+    totalCard: {
+      flex: 1,
+      backgroundColor: p.glassBg,
+      borderColor: p.glassBorder,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderRadius: Radius.card,
+      paddingVertical: Spacing.md,
+      paddingHorizontal: Spacing.lg,
+      gap: 2,
+    },
+    totalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    totalLabel: { color: p.dim, letterSpacing: Typography.micro.letterSpacing },
+    totalValue: { ...numberTextStyle, color: p.ink, fontSize: Typography.headline.fontSize },
     // Hero
     heroLabelRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
     hero: {
@@ -364,7 +411,7 @@ const makeStyles = (p: Palette) =>
     carryText: { fontSize: Typography.footnote.fontSize },
     carryLabel: { fontSize: Typography.caption.fontSize },
     // Accounts
-    chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+    chipsRow: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.sm },
     accountChip: {
       paddingHorizontal: Spacing.lg,
       paddingVertical: Spacing.md,

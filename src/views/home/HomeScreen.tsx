@@ -143,16 +143,10 @@ export function HomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="Всего денег и график баланса"
             >
-              <View style={styles.totalHeader}>
-                <Text {...textProps('micro')} style={styles.totalLabel}>
-                  ВСЕГО
-                </Text>
-                <AppIcon name="stats-chart" color={palette.dim} size={14} />
-              </View>
+              <AppIcon name="stats-chart" color={palette.dim} size={16} />
               <Money
                 minor={totalMinor}
                 currency={base}
-                options={{ hideCode: true }}
                 style={styles.totalValue}
                 numberOfLines={1}
                 adjustsFontSizeToFit
@@ -360,17 +354,22 @@ const makeStyles = (p: Palette) =>
     todayLine: { color: p.dim, textTransform: 'capitalize' },
     totalCard: {
       flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: Spacing.sm,
       backgroundColor: p.glassBg,
       borderColor: p.glassBorder,
       borderWidth: StyleSheet.hairlineWidth,
       borderRadius: Radius.card,
       paddingVertical: Spacing.md,
       paddingHorizontal: Spacing.lg,
-      gap: 2,
     },
-    totalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    totalLabel: { color: p.dim, letterSpacing: Typography.micro.letterSpacing },
-    totalValue: { ...numberTextStyle, color: p.ink, fontSize: Typography.headline.fontSize },
+    totalValue: {
+      ...numberTextStyle,
+      flex: 1,
+      color: p.ink,
+      fontSize: Typography.headline.fontSize,
+    },
     // Hero
     heroLabelRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
     hero: {

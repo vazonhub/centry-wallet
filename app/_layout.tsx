@@ -12,7 +12,7 @@ import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-c
 import { useAppBootstrap } from '@hooks/useAppBootstrap';
 import { useNotificationResponse } from '@hooks/useNotificationResponse';
 import { usePendingIntent } from '@hooks/usePendingIntent';
-import { useIsDark } from '@hooks/usePalette';
+import { useIsDark, usePalette } from '@hooks/usePalette';
 import { useWidgetDeepLink } from '@hooks/useWidgetDeepLink';
 import { CategoryEditorSheet } from '@components/CategoryEditorSheet';
 import { TransactionDetailSheet } from '@components/TransactionDetailSheet';
@@ -36,6 +36,7 @@ export default function RootLayout() {
   useNotificationResponse();
   usePendingIntent();
   const isDark = useIsDark();
+  const palette = usePalette();
 
   useEffect(() => {
     const id = setTimeout(() => void SplashScreen.hideAsync(), 0);
@@ -43,7 +44,10 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <GestureHandlerRootView style={styles.root}>
+    // The root is painted with the theme canvas so no white flashes through
+    // during native navigation when the system scheme differs from the app's
+    // (light system + dark app). Mirrors the Bsuir Time root-background fix.
+    <GestureHandlerRootView style={[styles.root, { backgroundColor: palette.canvasBase }]}>
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <BottomSheetModalProvider>
           <Stack screenOptions={{ headerShown: false }}>

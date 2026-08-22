@@ -23,7 +23,7 @@ import type { Palette } from '@theme';
 import { Radius, Spacing, Typography } from '@theme';
 import { currentTzOffsetMin } from '@utils/date';
 import { hapticLight } from '@utils/haptics';
-import { convertToBase, localDay } from '@utils/money';
+import { convertToBase, localDay, minorToAmountInput, parseAmountToMinor } from '@utils/money';
 
 const WHITE = '#ffffff'; // white text on the saturated red delete button (both themes)
 
@@ -92,6 +92,27 @@ export function TransactionDetailSheet() {
     [tx],
   );
 
+  const onEditAmount = useCallback(() => {
+    if (!tx || tx.kind === 'transfer') return;
+    const current = tx;
+    const kind = current.kind === 'income' ? 'income' : 'expense';
+    Alert.prompt(
+      'Сумма',
+      'Исправьте сумму, если ввели не то число.',
+      async (value?: string) => {
+        const abs = parseAmountToMinor(value ?? '', current.currency);
+        if (abs == null || abs <= 0) return;
+        await TransactionsController.editTransactionAmount(current.id, abs, kind);
+        setTx({ ...current, amountMinor: kind === 'income' ? abs : -abs });
+        onChangedRef.current?.();
+        hapticLight();
+      },
+      'plain-text',
+      minorToAmountInput(Math.abs(current.amountMinor), current.currency),
+      'decimal-pad',
+    );
+  }, [tx]);
+
   const onEditNote = useCallback(() => {
     if (!tx) return;
     const current = tx;
@@ -149,15 +170,27 @@ export function TransactionDetailSheet() {
       <BottomSheetScrollView contentContainerStyle={styles.detail}>
         {tx && (
           <>
-            <Money
-              minor={tx.amountMinor}
-              currency={tx.currency}
-              options={{ showPlus: !isTransfer }}
-              style={[
-                styles.detailAmount,
-                { color: tx.amountMinor >= 0 && !isTransfer ? palette.pos : palette.ink },
-              ]}
-            />
+            {isTransfer ? (
+              <Money
+                minor={tx.amountMinor}
+                currency={tx.currency}
+                options={{ showPlus: false }}
+                style={[styles.detailAmount, { color: palette.ink }]}
+              />
+            ) : (
+              <Pressable onPress={onEditAmount} accessibilityRole="button">
+                <Money
+                  minor={tx.amountMinor}
+                  currency={tx.currency}
+                  options={{ showPlus: true }}
+                  style={[
+                    styles.detailAmount,
+                    { color: tx.amountMinor >= 0 ? palette.pos : palette.ink },
+                  ]}
+                />
+                <Text style={styles.editHint}>нажмите, чтобы изменить сумму</Text>
+              </Pressable>
+            )}
             <View style={styles.detailRows}>
               <DetailRow
                 label="Счёт"
@@ -248,6 +281,12 @@ const makeStyles = (p: Palette) =>
       fontWeight: Typography.hero.fontWeight,
       textAlign: 'center',
       marginTop: Spacing.sm,
+    },
+    editHint: {
+      color: p.dim2,
+      fontSize: Typography.caption.fontSize,
+      textAlign: 'center',
+      marginTop: 2,
     },
     detailRows: {
       backgroundColor: p.glassBg,

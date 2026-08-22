@@ -120,6 +120,25 @@ export async function updateTransactionMeta(
   await db.runAsync(`UPDATE transactions SET ${sets.join(', ')} WHERE id = ?;`, params);
 }
 
+/**
+ * Corrects a transaction's amount (signed minor units — negative expense,
+ * positive income). The currency and frozen rate are unchanged; only the
+ * magnitude/sign of what was recorded. Not for transfers (their two legs must
+ * stay in sync).
+ */
+export async function updateTransactionAmount(
+  id: Id,
+  amountMinor: number,
+  updatedAt: number,
+): Promise<void> {
+  const db = getDb();
+  await db.runAsync(`UPDATE transactions SET amount_minor = ?, updated_at = ? WHERE id = ?;`, [
+    amountMinor,
+    updatedAt,
+    id,
+  ]);
+}
+
 export async function updateTransactionDate(
   id: Id,
   occurredAt: number,

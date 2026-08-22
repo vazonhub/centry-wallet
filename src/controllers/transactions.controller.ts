@@ -142,12 +142,27 @@ async function addTransfer(input: AddTransferInput): Promise<void> {
   await DataController.loadAll();
 }
 
-/** Edits a transaction's category/note (amount edit lands with the full editor). */
+/** Edits a transaction's category/note. */
 async function editTransactionMeta(
   id: Id,
   fields: { categoryId?: Id | null; note?: string | null },
 ): Promise<void> {
   await TransactionsRepo.updateTransactionMeta(id, fields, nowSec());
+  await DataController.loadAll();
+}
+
+/**
+ * Corrects a transaction's amount. `amountMinorAbs` is the non-negative
+ * magnitude; the sign is applied from `kind` (expense → negative, income →
+ * positive). Not for transfers.
+ */
+async function editTransactionAmount(
+  id: Id,
+  amountMinorAbs: number,
+  kind: 'expense' | 'income',
+): Promise<void> {
+  const signed = kind === 'income' ? amountMinorAbs : -amountMinorAbs;
+  await TransactionsRepo.updateTransactionAmount(id, signed, nowSec());
   await DataController.loadAll();
 }
 
@@ -169,6 +184,7 @@ export const TransactionsController = {
   createAccount,
   updateAccount,
   editTransactionMeta,
+  editTransactionAmount,
   editTransactionDate,
   deleteTransaction,
 };

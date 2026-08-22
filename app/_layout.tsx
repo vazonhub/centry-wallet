@@ -28,10 +28,15 @@ export const unstable_settings = {
 };
 
 export default function RootLayout() {
-  // Bootstrap runs as a background side-effect. We DO NOT gate rendering on it —
-  // the UI always renders (empty state until data loads), so a slow/failed
-  // bootstrap can never leave a blank screen.
-  useAppBootstrap();
+  // Gate the app tree on bootstrap readiness. `ready` is ALWAYS set — even if
+  // bootstrap throws (see useAppBootstrap's `finally`) — so this can never leave
+  // a permanent blank screen; it only holds the native splash for the few ms of
+  // local SQLite load. Mounting the screens only after the data store is
+  // populated makes them read accounts/categories on their FIRST render, fixing
+  // the bug where the initial async setSnapshot landed in the mount→subscribe
+  // race window and data stayed empty until an unrelated interaction (opening a
+  // picker/modal) forced a re-commit.
+  const { ready } = useAppBootstrap();
   useWidgetDeepLink();
   useNotificationResponse();
   usePendingIntent();
@@ -39,9 +44,8 @@ export default function RootLayout() {
   const palette = usePalette();
 
   useEffect(() => {
-    const id = setTimeout(() => void SplashScreen.hideAsync(), 0);
-    return () => clearTimeout(id);
-  }, []);
+    if (ready) void SplashScreen.hideAsync();
+  }, [ready]);
 
   return (
     // The root is painted with the theme canvas so no white flashes through
@@ -50,13 +54,17 @@ export default function RootLayout() {
     <GestureHandlerRootView style={[styles.root, { backgroundColor: palette.canvasBase }]}>
       <SafeAreaProvider initialMetrics={initialWindowMetrics}>
         <BottomSheetModalProvider>
-          <Stack screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="(tabs)" />
-          </Stack>
-          <InputSheet />
-          <CategoryEditorSheet />
-          <TransactionDetailSheet />
-          <OnboardingScreen />
+          {ready && (
+            <>
+              <Stack screenOptions={{ headerShown: false }}>
+                <Stack.Screen name="(tabs)" />
+              </Stack>
+              <InputSheet />
+              <CategoryEditorSheet />
+              <TransactionDetailSheet />
+              <OnboardingScreen />
+            </>
+          )}
           <StatusBar style={isDark ? 'light' : 'dark'} />
         </BottomSheetModalProvider>
       </SafeAreaProvider>

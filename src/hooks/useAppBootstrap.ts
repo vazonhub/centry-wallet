@@ -30,6 +30,19 @@ export function useAppBootstrap(): { ready: boolean; error: Error | null } {
     };
   }, []);
 
+  // Apply the persisted theme to the native `Appearance` override AFTER mount.
+  // This is deliberately NOT done in the store's onRehydrateStorage: that runs
+  // at module-init time (before the root view is attached), and an early
+  // setColorScheme can deadlock the first commit on the New Architecture,
+  // hanging the app on the splash until an external trait-collection change
+  // (a system dark/light toggle) kicks it loose. A mount effect runs after the
+  // first paint, so the native flip is safe; the JS palette already renders the
+  // correct colors from `resolvedScheme`, so there is no flash.
+  useEffect(() => {
+    const { theme } = useSettingsStore.getState();
+    Appearance.setColorScheme(theme === 'system' ? null : theme);
+  }, []);
+
   // In 'system' theme, follow the OS appearance changes.
   useEffect(() => {
     const sub = Appearance.addChangeListener(({ colorScheme }) => {

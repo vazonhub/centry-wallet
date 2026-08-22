@@ -149,8 +149,6 @@ export function HomeScreen() {
                 currency={base}
                 style={styles.totalValue}
                 numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.6}
               />
             </Pressable>
           </View>
@@ -340,9 +338,13 @@ const makeStyles = (p: Palette) =>
       paddingBottom: 170,
       gap: Spacing.cardGap,
     },
-    topRow: { flexDirection: 'row', gap: Spacing.sm },
+    topRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.sm,
+    },
     todayCard: {
-      flex: 1,
       justifyContent: 'center',
       backgroundColor: p.glassBg,
       borderColor: p.glassBorder,
@@ -353,7 +355,6 @@ const makeStyles = (p: Palette) =>
     },
     todayLine: { color: p.dim, textTransform: 'capitalize' },
     totalCard: {
-      flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       gap: Spacing.sm,
@@ -364,12 +365,7 @@ const makeStyles = (p: Palette) =>
       paddingVertical: Spacing.md,
       paddingHorizontal: Spacing.lg,
     },
-    totalValue: {
-      ...numberTextStyle,
-      flex: 1,
-      color: p.ink,
-      fontSize: Typography.headline.fontSize,
-    },
+    totalValue: { ...numberTextStyle, color: p.dim, fontSize: Typography.headline.fontSize },
     // Hero
     heroLabelRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
     hero: {

@@ -1,6 +1,6 @@
 import type { Account, Transaction } from '@models';
 
-import { type BudgetPlan, periodBounds } from './budget';
+import { type BudgetPlan, effectivePeriod, periodBounds } from './budget';
 import { carryOver, convertToBase, perDay } from './money';
 
 const E6_ONE = 1_000_000;
@@ -58,6 +58,26 @@ export function periodSpentBaseMinor(recent: Transaction[], periodStartLocalDay:
   return spent;
 }
 
+/**
+ * Earliest recorded activity day within [periodStart, today], or null when the
+ * user has no transactions in the period yet. Any kind counts (a transfer or an
+ * income is still evidence the user was tracking that day) — it anchors the
+ * allowance so untracked earlier days don't inflate the "запас".
+ */
+export function firstActivityLocalDay(
+  recent: Transaction[],
+  periodStartLocalDay: string,
+  todayLocalDay: string,
+): string | null {
+  let earliest: string | null = null;
+  for (const t of recent) {
+    if (t.localDay < periodStartLocalDay) continue;
+    if (t.localDay > todayLocalDay) continue;
+    if (earliest === null || t.localDay < earliest) earliest = t.localDay;
+  }
+  return earliest;
+}
+
 export interface AllowanceInput {
   /** Planned spend for the current period (calendar week/month). */
   plan: BudgetPlan;
@@ -98,13 +118,20 @@ export interface Allowance {
  * The single source of the home "можно сегодня" math, shared by the home screen
  * and the WidgetKit snapshot so the two can never drift (the widget must never
  * recompute this in Swift — docs/DATA_MODEL.md#снимок-для-виджета). Linear model:
- * the planned period spend is spread evenly across the calendar period; the
- * carry-over plate tracks deviation from that pace. The plan is a standalone
- * budget — incomes/expenses never change it, and account balances do NOT feed
- * the daily number (only the separate "денег может не хватить" warning).
+ * the planned spend is spread evenly across the period; the carry-over plate
+ * tracks deviation from that pace. The plan is a standalone budget — incomes/
+ * expenses never change it, and account balances do NOT feed the daily number
+ * (only the separate "денег может не хватить" warning).
+ *
+ * The period is narrowed to what the user has actually been tracking: the daily
+ * number and the "запас" are anchored to the first recorded activity day of the
+ * period (or today, on a fresh mid-period launch), so untracked earlier days
+ * never inflate the surplus (owner, 2026-08-23 — "на остаток периода").
  */
 export function computeAllowance(i: AllowanceInput): Allowance {
   const bounds = periodBounds(i.plan.period, i.now);
+  const anchor = firstActivityLocalDay(i.recent, bounds.startLocalDay, i.todayLocalDay);
+  const eff = effectivePeriod(bounds, anchor, i.todayLocalDay);
 
   // The plan amount is entered in its own currency; convert to base.
   const expectedBaseMinor =
@@ -115,19 +142,19 @@ export function computeAllowance(i: AllowanceInput): Allowance {
         )
       : 0;
 
-  const perDayMinor = perDay(expectedBaseMinor, bounds.daysInPeriod);
+  const perDayMinor = perDay(expectedBaseMinor, eff.daysInPeriod);
   const todaySpentMinor = todaySpentBaseMinor(i.recent, i.todayLocalDay);
-  const periodSpentMinor = periodSpentBaseMinor(i.recent, bounds.startLocalDay);
-  const carryMinor = carryOver(perDayMinor, bounds.daysElapsed, periodSpentMinor);
+  const periodSpentMinor = periodSpentBaseMinor(i.recent, eff.startLocalDay);
+  const carryMinor = carryOver(perDayMinor, eff.daysElapsed, periodSpentMinor);
   return {
     perDayMinor,
     todaySpentMinor,
     carryMinor,
     daysLeft: bounds.daysLeft,
-    daysInPeriod: bounds.daysInPeriod,
+    daysInPeriod: eff.daysInPeriod,
     expectedBaseMinor,
     periodSpentMinor,
-    periodStartLocalDay: bounds.startLocalDay,
+    periodStartLocalDay: eff.startLocalDay,
     configured: expectedBaseMinor > 0,
   };
 }

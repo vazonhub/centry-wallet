@@ -4,6 +4,7 @@ import {
   convertFromBase,
   convertToBase,
   formatMoney,
+  formatMoneyCompact,
   getMinorUnits,
   localDay,
   minorToAmountInput,
@@ -201,5 +202,37 @@ describe('minorToAmountInput — editable field pre-fill (inverse of parseAmount
     ] as const) {
       expect(parseAmountToMinor(minorToAmountInput(minor, cur), cur)).toBe(minor);
     }
+  });
+});
+
+describe('formatMoneyCompact — abbreviated large values', () => {
+  it('keeps the full grouped form below 10 000 major units', () => {
+    expect(formatMoneyCompact(1_000_00, 'BYN')).toBe('1 000,00 BYN');
+    expect(formatMoneyCompact(9_999_99, 'BYN')).toBe('9 999,99 BYN');
+    expect(formatMoneyCompact(0, 'BYN')).toBe('0,00 BYN');
+  });
+
+  it('abbreviates thousands from 10 000 up', () => {
+    expect(formatMoneyCompact(10_000_00, 'BYN')).toBe('10k BYN');
+    expect(formatMoneyCompact(12_345_00, 'BYN')).toBe('12,3k BYN');
+    expect(formatMoneyCompact(999_999_00, 'BYN')).toBe('999,9k BYN');
+  });
+
+  it('abbreviates millions, billions and trillions', () => {
+    expect(formatMoneyCompact(1_000_000_00, 'BYN')).toBe('1m BYN');
+    expect(formatMoneyCompact(1_500_000_00, 'BYN')).toBe('1,5m BYN');
+    expect(formatMoneyCompact(2_000_000_000_00, 'BYN')).toBe('2b BYN');
+    expect(formatMoneyCompact(3_000_000_000_000_00, 'BYN')).toBe('3t BYN');
+  });
+
+  it('honours sign and hideCode options', () => {
+    expect(formatMoneyCompact(-25_000_00, 'BYN')).toBe('-25k BYN');
+    expect(formatMoneyCompact(25_000_00, 'BYN', { showPlus: true })).toBe('+25k BYN');
+    expect(formatMoneyCompact(25_000_00, 'BYN', { hideCode: true })).toBe('25k');
+  });
+
+  it('truncates the fraction toward zero (never over-promises)', () => {
+    // 19 999.00 → 19,9k (not rounded up to 20k).
+    expect(formatMoneyCompact(19_999_00, 'BYN')).toBe('19,9k BYN');
   });
 });

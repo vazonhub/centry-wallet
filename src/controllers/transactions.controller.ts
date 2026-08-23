@@ -100,6 +100,31 @@ async function updateAccount(id: Id, input: UpdateAccountInput): Promise<void> {
   await DataController.loadAll();
 }
 
+/**
+ * Deletes an account by archiving it (soft delete via `archived_at`, rule 10) —
+ * it drops out of the wallet, chips and filters, but its transactions stay in
+ * history untouched (rule 2: frozen rates/amounts are never rewritten). Refuses
+ * to remove the last active account, and promotes another account to default if
+ * the archived one was the default.
+ */
+async function deleteAccount(id: Id): Promise<void> {
+  const active = await AccountsRepo.listAccounts(false);
+  if (active.length <= 1) {
+    throw new Error('Нельзя удалить единственный счёт — сначала создайте другой.');
+  }
+  const now = nowSec();
+  const target = active.find((a) => a.id === id);
+  await AccountsRepo.archiveAccount(id, now);
+  if (target?.isDefault) {
+    const next = active.find((a) => a.id !== id);
+    if (next) await AccountsRepo.setDefaultAccount(next.id, now);
+  }
+  if (useSettingsStore.getState().lastAccountId === id) {
+    useSettingsStore.getState().setLastAccountId(null);
+  }
+  await DataController.loadAll();
+}
+
 export interface AddTransferInput {
   fromAccountId: Id;
   fromCurrency: string;
@@ -183,6 +208,7 @@ export const TransactionsController = {
   addTransfer,
   createAccount,
   updateAccount,
+  deleteAccount,
   editTransactionMeta,
   editTransactionAmount,
   editTransactionDate,

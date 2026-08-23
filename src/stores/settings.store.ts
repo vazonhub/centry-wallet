@@ -53,7 +53,7 @@ interface SettingsState {
   setInputSiri(v: boolean): void;
   setInputEveningPush(v: boolean): void;
   setEveningPushTime(t: string): void;
-  setLastAccountId(id: string): void;
+  setLastAccountId(id: string | null): void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -97,16 +97,16 @@ export const useSettingsStore = create<SettingsState>()(
       storage: createJSONStorage(() => mmkvStorage),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
-        if (state.theme === 'system') {
-          Appearance.setColorScheme(null);
-          const r = systemScheme();
-          if (state.resolvedScheme !== r) useSettingsStore.setState({ resolvedScheme: r });
-        } else {
-          Appearance.setColorScheme(state.theme);
-          if (state.resolvedScheme !== state.theme) {
-            useSettingsStore.setState({ resolvedScheme: state.theme });
-          }
-        }
+        // Reconcile only the JS-side resolved scheme here. Do NOT touch the
+        // native `Appearance` during rehydration: this runs at module-init time,
+        // before the root view is attached, and an early setColorScheme can
+        // deadlock the first commit on the New Architecture — the app hangs on
+        // the splash until an external trait-collection change (a system
+        // dark/light toggle) kicks it loose. The native flip is applied once
+        // after mount instead (see useAppBootstrap), mirroring the deferral the
+        // `setTheme` action already uses.
+        const r = state.theme === 'system' ? systemScheme() : state.theme;
+        if (state.resolvedScheme !== r) useSettingsStore.setState({ resolvedScheme: r });
       },
     },
   ),

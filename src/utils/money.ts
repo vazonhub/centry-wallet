@@ -261,3 +261,58 @@ export function formatMoney(
 function groupThousands(digits: string): string {
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 }
+
+/** Suffix scales for the compact formatter, largest first. */
+const COMPACT_SCALES: readonly [bigint, string][] = [
+  [10n ** 12n, 't'],
+  [10n ** 9n, 'b'],
+  [10n ** 6n, 'm'],
+  [10n ** 3n, 'k'],
+];
+
+/** Below this many MAJOR units, compact formatting falls back to the full form. */
+const COMPACT_THRESHOLD_MAJOR = 10_000n;
+
+/**
+ * Compact money for tight surfaces (home hero, "потрачено", wallet total) where
+ * a full grouped number would overflow the block. Values under 10 000 major
+ * units keep the exact {@link formatMoney} form (so 1 000 → "1 000", cents
+ * intact); from 10 000 up they collapse to one significant fraction with a
+ * k/m/b/t suffix, e.g. 10 000 → "10k", 12 345 → "12,3k", 1 500 000 → "1,5m".
+ * Still integer-only math (BigInt) — the abbreviation is display-only.
+ */
+export function formatMoneyCompact(
+  minor: number,
+  currency: string,
+  opts: FormatMoneyOptions = {},
+): string {
+  const units = getMinorUnits(currency);
+  const divisor = 10n ** BigInt(units);
+  const negative = minor < 0;
+  const absMinor = BigInt(negative ? -minor : minor);
+  const intMajor = absMinor / divisor;
+
+  if (intMajor < COMPACT_THRESHOLD_MAJOR) return formatMoney(minor, currency, opts);
+
+  let scale = 1_000n;
+  let suffix = 'k';
+  for (const [s, suf] of COMPACT_SCALES) {
+    if (intMajor >= s) {
+      scale = s;
+      suffix = suf;
+      break;
+    }
+  }
+
+  const whole = intMajor / scale;
+  const tenth = ((intMajor % scale) * 10n) / scale; // 0..9, truncated toward zero
+  const numberStr = tenth > 0n ? `${whole},${tenth}` : `${whole}`;
+
+  let sign = '';
+  if (!opts.signless) {
+    if (negative) sign = '-';
+    else if (opts.showPlus && minor > 0) sign = '+';
+  }
+  const code = opts.hideCode ? '' : ' ' + currency.toUpperCase();
+  return `${sign}${numberStr}${suffix}${code}`;
+}

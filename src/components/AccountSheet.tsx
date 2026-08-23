@@ -1,5 +1,5 @@
 import { useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
@@ -98,6 +98,35 @@ export function AccountSheet() {
     hapticSuccess();
   };
 
+  const onDelete = () => {
+    if (!editingId) return;
+    const accounts = useDataStore.getState().accounts;
+    if (accounts.length <= 1) {
+      Alert.alert('Нельзя удалить счёт', 'Это ваш единственный счёт. Сначала создайте другой.');
+      return;
+    }
+    Alert.alert(
+      'Удалить счёт?',
+      'Счёт скроется из кошелька, чипсов и фильтров. Записи по нему останутся в истории — курсы и суммы не переписываются.',
+      [
+        { text: 'Отмена', style: 'cancel' },
+        {
+          text: 'Удалить',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await TransactionsController.deleteAccount(editingId);
+              sheetRef.current?.dismiss();
+              hapticSuccess();
+            } catch (e) {
+              Alert.alert('Не удалось удалить', e instanceof Error ? e.message : 'Ошибка.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const renderBackdrop = (props: BottomSheetBackdropProps) => (
     <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} />
   );
@@ -105,7 +134,7 @@ export function AccountSheet() {
   return (
     <BottomSheetModal
       ref={sheetRef}
-      snapPoints={['60%']}
+      snapPoints={['68%']}
       enableDynamicSizing={false}
       enablePanDownToClose
       keyboardBehavior="interactive"
@@ -166,6 +195,11 @@ export function AccountSheet() {
         <Pressable onPress={onSubmit} style={styles.create}>
           <Text style={styles.createText}>{editingId ? 'Сохранить' : 'Создать'}</Text>
         </Pressable>
+        {editingId && (
+          <Pressable onPress={onDelete} style={styles.delete}>
+            <Text style={styles.deleteText}>Удалить счёт</Text>
+          </Pressable>
+        )}
       </BottomSheetView>
     </BottomSheetModal>
   );
@@ -245,4 +279,6 @@ const makeStyles = (p: Palette) =>
       marginTop: Spacing.sm,
     },
     createText: { color: p.btnInk, fontSize: Typography.headline.fontSize, fontWeight: '600' },
+    delete: { alignItems: 'center', paddingVertical: Spacing.md },
+    deleteText: { color: p.neg, fontSize: Typography.footnote.fontSize, fontWeight: '600' },
   });

@@ -53,7 +53,7 @@ interface SettingsState {
   setInputSiri(v: boolean): void;
   setInputEveningPush(v: boolean): void;
   setEveningPushTime(t: string): void;
-  setLastAccountId(id: string): void;
+  setLastAccountId(id: string | null): void;
 }
 
 export const useSettingsStore = create<SettingsState>()(

@@ -16,12 +16,15 @@ import { useDataStore } from '@stores/data.store';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
 import { numberTextStyle, Radius, Spacing, textProps, Typography } from '@theme';
-import { formatTodayHuman, todayLocalDay } from '@utils/date';
+import { formatTodayCompact, todayLocalDay } from '@utils/date';
 import { hexToRgba } from '@utils/color';
 import { hapticLight } from '@utils/haptics';
-import { convertToBase, formatMoney } from '@utils/money';
+import { convertToBase, formatMoney, formatMoneyCompact } from '@utils/money';
 import { periodLabel } from '@utils/budget';
 import { computeAllowance, totalBalanceBaseMinor } from '@utils/summary';
+
+/** Shared font size for the top-row date and wallet-total cards (same type). */
+const TOP_ROW_FONT_SIZE = 14;
 
 /** Net change of a day in base minor units (transfers excluded — internal moves). */
 function dayNetBaseMinor(txs: Transaction[]): number {
@@ -96,6 +99,12 @@ export function HomeScreen() {
 
   const insufficientFunds = configured && shortfallMinor > 0;
 
+  // The wallet-total drives how tightly the date is packed, but only genuinely
+  // huge sums steal enough room to matter: full date under a million, drop the
+  // month name in the millions, drop the weekday too in the billions+.
+  const totalMajorAbs = Math.abs(totalMinor) / 100;
+  const dateTier: 0 | 1 | 2 = totalMajorAbs < 1_000_000 ? 0 : totalMajorAbs < 1_000_000_000 ? 1 : 2;
+
   const onWarningPress = useCallback(() => {
     hapticLight();
     Alert.alert(
@@ -133,8 +142,14 @@ export function HomeScreen() {
           {/* Top row: today (left) + wallet total (right, tappable) */}
           <View style={styles.topRow}>
             <View style={styles.todayCard}>
-              <Text {...textProps('caption')} style={styles.todayLine}>
-                {formatTodayHuman()}
+              <Text
+                {...textProps('caption')}
+                style={styles.todayLine}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.85}
+              >
+                {formatTodayCompact(dateTier)}
               </Text>
             </View>
             <Pressable
@@ -150,8 +165,11 @@ export function HomeScreen() {
               <Money
                 minor={totalMinor}
                 currency={base}
+                compact
                 style={styles.totalValue}
                 numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.7}
               />
             </Pressable>
           </View>
@@ -177,16 +195,26 @@ export function HomeScreen() {
               <Money
                 minor={perDayMinor}
                 currency={base}
+                compact
                 options={{ hideCode: true }}
                 style={[styles.heroNumber, { color: heroColor }]}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.5}
               />
             ) : (
               <Text style={[styles.heroNumber, { color: palette.dim }]}>—</Text>
             )}
             <View style={styles.heroFooter}>
               {configured ? (
-                <Text {...textProps('footnote')} style={styles.heroSpent}>
-                  потрачено {formatMoney(todaySpent, base, { hideCode: true })} {base}
+                <Text
+                  {...textProps('footnote')}
+                  style={styles.heroSpent}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.8}
+                >
+                  потрачено {formatMoneyCompact(todaySpent, base, { hideCode: true })} {base}
                 </Text>
               ) : (
                 <Text {...textProps('footnote')} style={styles.heroSpent}>
@@ -200,6 +228,7 @@ export function HomeScreen() {
                   <Money
                     minor={carry}
                     currency={base}
+                    compact
                     options={{ showPlus: true, hideCode: true }}
                     style={[styles.carryText, { color: carry > 0 ? palette.pos : palette.neg }]}
                   />
@@ -217,6 +246,7 @@ export function HomeScreen() {
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
+            style={styles.chipsScroll}
             contentContainerStyle={styles.chipsRow}
           >
             {accounts.map((a) => (
@@ -344,10 +374,13 @@ const makeStyles = (p: Palette) =>
     topRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
-      alignItems: 'center',
+      // Both cards share the row height (the taller one wins); the total card
+      // reads slightly larger via its bigger number.
+      alignItems: 'stretch',
       gap: Spacing.sm,
     },
     todayCard: {
+      flexShrink: 1,
       justifyContent: 'center',
       backgroundColor: p.glassBg,
       borderColor: p.glassBorder,
@@ -356,11 +389,14 @@ const makeStyles = (p: Palette) =>
       paddingVertical: Spacing.md,
       paddingHorizontal: Spacing.lg,
     },
-    todayLine: { color: p.dim, textTransform: 'capitalize' },
+    todayLine: { color: p.dim, textTransform: 'capitalize', fontSize: TOP_ROW_FONT_SIZE },
     totalCard: {
+      flexShrink: 0,
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'flex-end',
       gap: Spacing.sm,
+      maxWidth: '58%',
       backgroundColor: p.glassBg,
       borderColor: p.glassBorder,
       borderWidth: StyleSheet.hairlineWidth,
@@ -368,7 +404,12 @@ const makeStyles = (p: Palette) =>
       paddingVertical: Spacing.md,
       paddingHorizontal: Spacing.lg,
     },
-    totalValue: { ...numberTextStyle, color: p.dim, fontSize: Typography.headline.fontSize },
+    totalValue: {
+      ...numberTextStyle,
+      color: p.dim,
+      flexShrink: 1,
+      fontSize: TOP_ROW_FONT_SIZE,
+    },
     // Hero
     heroLabelRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
     hero: {
@@ -396,8 +437,9 @@ const makeStyles = (p: Palette) =>
       justifyContent: 'space-between',
       marginTop: Spacing.xs,
     },
-    heroSpent: { color: p.dim },
+    heroSpent: { color: p.dim, flexShrink: 1, marginRight: Spacing.sm },
     carry: {
+      flexShrink: 0,
       flexDirection: 'row',
       alignItems: 'baseline',
       gap: 4,
@@ -408,11 +450,14 @@ const makeStyles = (p: Palette) =>
     },
     carryText: { fontSize: Typography.footnote.fontSize },
     carryLabel: { fontSize: Typography.caption.fontSize },
-    // Accounts
+    // Accounts — full-bleed scroller: cancel the parent's screen padding so chips
+    // scroll to the real screen edge, but keep the first/last chip inset via the
+    // content padding.
+    chipsScroll: { marginHorizontal: -Spacing.screenPadding },
     chipsRow: {
       flexDirection: 'row',
       gap: Spacing.sm,
-      paddingRight: Spacing.sm,
+      paddingHorizontal: Spacing.screenPadding,
       paddingBottom: Spacing.sm,
     },
     accountChip: {

@@ -32,8 +32,14 @@ enum SnapshotStore {
       MMKV.initialize(rootDir: container)
       didInitialize = true
     }
+    // Multi-process mode is REQUIRED here: the app (a separate process) is the
+    // writer and this widget-extension process is a long-lived reader. In
+    // single-process mode MMKV keeps its in-memory copy from the first open and
+    // never re-reads the app's later writes, so the widget renders the all-zero
+    // placeholder forever. `.multiProcess` uses an inter-process file lock and
+    // re-checks the file on open, so each timeline reload sees fresh data.
     // No `path:` argument → uses the rootDir set above → <container>/centry.widget.
-    return MMKV(mmapID: mmapID)
+    return MMKV(mmapID: mmapID, mode: .multiProcess)
   }
 
   /// Loads and decodes the latest snapshot, or nil if none has been written yet.

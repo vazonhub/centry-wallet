@@ -123,3 +123,9 @@ EAS_PROJECT_ID=
 ## Версионирование
 
 `npm run bump:patch|minor|major` двигают marketing-версию (package.json) и `ios.buildNumber` (`scripts/bump-build.js`). Build 0 — линия `0.x`. Первая публичная — `1.0.0`.
+
+## Changelog
+
+Ведём [`CHANGELOG.md`](../CHANGELOG.md) (формат Keep a Changelog). По ходу работы дописывайте изменения в раздел **`## [Unreleased]`** (подзаголовки `### Добавлено / Изменено / Исправлено`).
+
+При бампе версии цепочка `bump:*` вызывает `scripts/changelog-release.js`, который **переносит** содержимое Unreleased в новую секцию `## [<version>] - <YYYY-MM-DD>` и оставляет пустой Unreleased. Скрипт идемпотентен (повторный `bump:build` без смены версии ничего не трогает) и не создаёт пустых секций. Порядок в `bump:patch`: `npm version` → `bump:build` → `changelog:release` (версия к моменту переноса уже в package.json).

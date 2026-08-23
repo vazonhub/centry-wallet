@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -35,6 +36,30 @@ import { matchesSearch } from '@utils/search';
 type Filter = 'all' | 'expense' | 'income' | string; // string = accountId
 type Row = { type: 'header'; day: string; net: number } | { type: 'tx'; tx: Transaction };
 
+/**
+ * Minimum overscrollable distance (content − viewport, px) before the category
+ * block is allowed to collapse. Must exceed the height that block reclaims, or
+ * collapsing would grow the viewport enough to bounce the offset back and
+ * re-expand — a flip-flop loop on short months.
+ */
+const COLLAPSE_MIN_SCROLL = 160;
+
+/** Short month labels for the month/year picker grid. */
+const MONTHS_SHORT = [
+  'Янв',
+  'Фев',
+  'Мар',
+  'Апр',
+  'Май',
+  'Июн',
+  'Июл',
+  'Авг',
+  'Сен',
+  'Окт',
+  'Ноя',
+  'Дек',
+];
+
 export function HistoryScreen() {
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
@@ -61,6 +86,9 @@ export function HistoryScreen() {
   const [query, setQuery] = useState('');
   // Collapse the per-category bars into one segmented bar once the feed scrolls.
   const [collapsed, setCollapsed] = useState(false);
+  // Month/year picker opened by tapping the month title.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerYear, setPickerYear] = useState(() => parseInt(month.slice(0, 4), 10));
 
   // Reload the visible month whenever it changes or the screen refocuses
   // (data may have changed via the input sheet).
@@ -136,18 +164,47 @@ export function HistoryScreen() {
     return segs;
   }, [topCategories, categoryById, outcome, palette]);
 
+  // The list content vs. viewport heights — used to gate the collapse so it can
+  // never enter a feedback loop when there is barely anything to scroll.
+  const contentH = useRef(0);
+  const viewportH = useRef(0);
+
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const y = e.nativeEvent.contentOffset.y;
-    // Hysteresis so it doesn't flip-flop right at the threshold. The crossfade
-    // + height morph is handled by the reanimated layout animations below.
-    const next = collapsed ? y > 24 : y > 56;
-    if (next !== collapsed) setCollapsed(next);
+    // Collapsing shrinks the fixed header, which grows the list viewport and
+    // pulls the scroll offset back up — with little content that bounce would
+    // flip the state forever. Only collapse when there is real room to scroll
+    // (more than the height the category block reclaims); expanding is always
+    // allowed so the user can restore it by scrolling back to the top.
+    if (!collapsed) {
+      const maxScroll = contentH.current - viewportH.current;
+      if (maxScroll <= COLLAPSE_MIN_SCROLL) return;
+      if (y > 56) setCollapsed(true);
+    } else if (y <= 24) {
+      setCollapsed(false);
+    }
   };
 
   // Clamp navigation: no future months, and no earlier than the first data month.
   const currentMonth = monthPrefix(todayLocalDay());
   const canNext = month < currentMonth;
   const canPrev = earliestMonth ? month > earliestMonth : false;
+
+  // Month/year picker bounds — same range as the arrows: [earliest data, now].
+  const minMonth = earliestMonth ?? currentMonth;
+  const minYear = parseInt(minMonth.slice(0, 4), 10);
+  const maxYear = parseInt(currentMonth.slice(0, 4), 10);
+
+  const openPicker = () => {
+    setPickerYear(parseInt(month.slice(0, 4), 10));
+    setPickerOpen(true);
+    hapticLight();
+  };
+  const pickMonth = (value: string) => {
+    setMonth(value);
+    setPickerOpen(false);
+    hapticLight();
+  };
 
   const onRowPress = useCallback(
     (tx: Transaction) => {
@@ -167,9 +224,16 @@ export function HistoryScreen() {
         >
           <Text style={[styles.navArrow, !canPrev && styles.navArrowDisabled]}>‹</Text>
         </Pressable>
-        <Text {...textProps('title')} style={styles.monthTitle}>
-          {formatMonth(month)}
-        </Text>
+        <Pressable
+          onPress={openPicker}
+          style={styles.monthTitleBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Выбрать месяц и год"
+        >
+          <Text {...textProps('title')} style={styles.monthTitle}>
+            {formatMonth(month)}
+          </Text>
+        </Pressable>
         <Pressable
           disabled={!canNext}
           onPress={() => setMonth(shiftMonth(month, 1))}
@@ -326,6 +390,68 @@ export function HistoryScreen() {
     </View>
   );
 
+  const MonthPicker = (
+    <Modal
+      visible={pickerOpen}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setPickerOpen(false)}
+    >
+      <Pressable style={styles.pickerScrim} onPress={() => setPickerOpen(false)}>
+        <Pressable style={styles.pickerCard} onPress={() => {}}>
+          <View style={styles.pickerYearRow}>
+            <Pressable
+              disabled={pickerYear <= minYear}
+              onPress={() => setPickerYear((y) => y - 1)}
+              style={styles.navBtn}
+            >
+              <Text style={[styles.navArrow, pickerYear <= minYear && styles.navArrowDisabled]}>
+                ‹
+              </Text>
+            </Pressable>
+            <Text {...textProps('title')} style={styles.pickerYear}>
+              {pickerYear}
+            </Text>
+            <Pressable
+              disabled={pickerYear >= maxYear}
+              onPress={() => setPickerYear((y) => y + 1)}
+              style={styles.navBtn}
+            >
+              <Text style={[styles.navArrow, pickerYear >= maxYear && styles.navArrowDisabled]}>
+                ›
+              </Text>
+            </Pressable>
+          </View>
+          <View style={styles.pickerGrid}>
+            {MONTHS_SHORT.map((label, i) => {
+              const value = `${pickerYear}-${String(i + 1).padStart(2, '0')}`;
+              const enabled = value >= minMonth && value <= currentMonth;
+              const selected = value === month;
+              return (
+                <Pressable
+                  key={value}
+                  disabled={!enabled}
+                  onPress={() => pickMonth(value)}
+                  style={[styles.pickerCell, selected && styles.pickerCellActive]}
+                >
+                  <Text
+                    style={[
+                      styles.pickerCellText,
+                      selected && styles.pickerCellTextActive,
+                      !enabled && styles.pickerCellTextDisabled,
+                    ]}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+
   return (
     <View style={styles.canvas}>
       <SafeAreaView style={styles.safe} edges={['top']}>
@@ -335,6 +461,12 @@ export function HistoryScreen() {
           data={rows}
           onScroll={onScroll}
           scrollEventThrottle={16}
+          onLayout={(e) => {
+            viewportH.current = e.nativeEvent.layout.height;
+          }}
+          onContentSizeChange={(_w, h) => {
+            contentH.current = h;
+          }}
           ListHeaderComponent={Header}
           ListEmptyComponent={
             <Text {...textProps('footnote')} style={styles.empty}>
@@ -396,6 +528,7 @@ export function HistoryScreen() {
           }}
         />
       </SafeAreaView>
+      {MonthPicker}
     </View>
   );
 }
@@ -423,7 +556,43 @@ const makeStyles = (p: Palette) =>
     navBtn: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.xs },
     navArrow: { color: p.ink, fontSize: 28, fontWeight: '400' },
     navArrowDisabled: { color: p.dim2, opacity: 0.4 },
+    monthTitleBtn: { flexShrink: 1, alignItems: 'center' },
     monthTitle: { color: p.ink, fontSize: Typography.title.fontSize, fontWeight: '700' },
+    // Month/year picker (tap the month title).
+    pickerScrim: {
+      flex: 1,
+      backgroundColor: p.scrim,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: Spacing.xl,
+    },
+    pickerCard: {
+      width: '100%',
+      maxWidth: 360,
+      backgroundColor: p.sheetBg,
+      borderRadius: Radius.hero,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: p.glassBorder,
+      padding: Spacing.xl,
+      gap: Spacing.lg,
+    },
+    pickerYearRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    pickerYear: { color: p.ink, fontSize: Typography.title.fontSize, fontWeight: '700' },
+    pickerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+    pickerCell: {
+      width: '30%',
+      flexGrow: 1,
+      paddingVertical: Spacing.md,
+      borderRadius: Radius.card,
+      backgroundColor: p.glassLightBg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: p.glassLightBorder,
+      alignItems: 'center',
+    },
+    pickerCellActive: { backgroundColor: p.btnBg, borderColor: p.btnBg },
+    pickerCellText: { color: p.ink, fontSize: Typography.footnote.fontSize },
+    pickerCellTextActive: { color: p.btnInk },
+    pickerCellTextDisabled: { color: p.dim2, opacity: 0.4 },
     totals: { flexDirection: 'row', gap: Spacing.sm },
     totalCard: {
       flex: 1,

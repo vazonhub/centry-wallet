@@ -1,4 +1,4 @@
-import { MMKV } from 'react-native-mmkv';
+import { MMKV, Mode } from 'react-native-mmkv';
 
 /**
  * MMKV holds settings and derived values only — everything here is
@@ -28,8 +28,15 @@ export const WIDGET_SNAPSHOT_KEY = 'snapshot';
  * App-Group MMKV instance holding the widget snapshot. Lives in the shared
  * container (see {@link APP_GROUP_ID}) so the Swift widget can read it. Only the
  * derived snapshot lives here — never the source of truth (that is SQLite).
+ *
+ * MUST be `MULTI_PROCESS`: the WidgetKit extension is a SEPARATE process reading
+ * this file. In single-process mode the two processes don't share the
+ * inter-process lock, so the widget opens a stale/empty view and renders all
+ * zeros (the "связка есть, данные не пробрасываются" bug from Bsuir Time). Both
+ * sides must agree — the Swift reader opens with `.multiProcess` too
+ * (targets/widget/SnapshotStore.swift).
  */
-export const widgetStorage = new MMKV({ id: WIDGET_MMAP_ID });
+export const widgetStorage = new MMKV({ id: WIDGET_MMAP_ID, mode: Mode.MULTI_PROCESS });
 
 /**
  * MMKV mmapID for the Siri App-Intent prefill channel (etap 8). Single-process,

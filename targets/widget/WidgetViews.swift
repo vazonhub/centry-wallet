@@ -81,9 +81,9 @@ private struct PeriodRemaining: View {
 struct SmallWidgetView: View {
   let snapshot: CentrySnapshot
   var body: some View {
-    // Content grouped and vertically centered (no gap between the hero and the
-    // period-remaining caption).
-    VStack(alignment: .leading, spacing: 6) {
+    // Content grouped and vertically centered, with a small breathing gap
+    // between the hero ("потрачено за сегодня") and the period-remaining caption.
+    VStack(alignment: .leading, spacing: 12) {
       HeroBlock(snapshot: snapshot)
       PeriodRemaining(snapshot: snapshot)
     }
@@ -98,8 +98,8 @@ struct MediumWidgetView: View {
   let snapshot: CentrySnapshot
   var body: some View {
     HStack(alignment: .center, spacing: 16) {
-      // Left: hero + period-remaining, grouped and vertically centered.
-      VStack(alignment: .leading, spacing: 6) {
+      // Left: hero + period-remaining, grouped with a small gap between them.
+      VStack(alignment: .leading, spacing: 12) {
         HeroBlock(snapshot: snapshot)
         PeriodRemaining(snapshot: snapshot)
       }

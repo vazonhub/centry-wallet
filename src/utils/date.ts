@@ -68,6 +68,23 @@ export function formatTodayHuman(date: Date = new Date()): string {
 }
 
 /**
+ * Progressive, space-saving forms of today's date for the home top row. `tier`
+ * shrinks the label as the neighbouring wallet-total number grows so both cards
+ * stay on one line (owner, 2026-08-23):
+ *   0 → "23 августа, ВС"   (month name + short weekday)
+ *   1 → "23.08 ВС"          (numeric date + short weekday)
+ *   2 → "23.08"             (numeric date only)
+ */
+export function formatTodayCompact(tier: 0 | 1 | 2, date: Date = new Date()): string {
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const wd = weekdayShort(date.getDay()).toUpperCase();
+  if (tier <= 0) return `${date.getDate()} ${RU_MONTHS_GEN[date.getMonth()]}, ${wd}`;
+  if (tier === 1) return `${dd}.${mm} ${wd}`;
+  return `${dd}.${mm}`;
+}
+
+/**
  * Whole days from today until the next payday (day-of-month `paydayDay`),
  * always ≥ 1. If today is the payday, returns the full span to next month's
  * payday. `paydayDay` is clamped to the length of the target month

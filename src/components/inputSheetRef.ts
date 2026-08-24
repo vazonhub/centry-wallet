@@ -1,4 +1,5 @@
 import { createRef } from 'react';
+import { router } from 'expo-router';
 import type { BottomSheetModal } from '@gorhom/bottom-sheet';
 
 import type { TransactionKind } from '@models';
@@ -35,6 +36,16 @@ let pendingPrefill: InputPrefill | null = null;
  */
 export function openInputSheet(prefill?: InputPrefill): void {
   pendingPrefill = prefill ?? null;
+  // The input sheet always belongs over the Home tab. A warm widget/notification
+  // tap opens it via this direct ref, so select Главная first — otherwise the
+  // sheet overlays whichever tab happened to be active (e.g. История). Harmless
+  // when already on Home (the FAB path). Guarded: on the cold-start race the
+  // router may not be mounted yet, and `+native-intent` already routes there.
+  try {
+    router.navigate('/(tabs)/(home)');
+  } catch {
+    // Router not ready (cold start) — the native-intent redirect covers it.
+  }
   let attempts = 0;
   const tryPresent = (): void => {
     if (inputSheetRef.current) {

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 import type { Transaction } from '@models';
-import { monthPrefix, todayLocalDay } from '@utils/date';
+import { monthNom, monthPrefix, todayLocalDay } from '@utils/date';
 
 export interface TopCategory {
   categoryId: string | null;
@@ -49,23 +49,8 @@ export function shiftMonth(month: string, delta: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-const MONTHS_RU = [
-  'Январь',
-  'Февраль',
-  'Март',
-  'Апрель',
-  'Май',
-  'Июнь',
-  'Июль',
-  'Август',
-  'Сентябрь',
-  'Октябрь',
-  'Ноябрь',
-  'Декабрь',
-];
-
-/** 'YYYY-MM' → 'Август 2026'. */
+/** 'YYYY-MM' → 'Август 2026' / 'August 2026' (localized, nominative). */
 export function formatMonth(month: string): string {
   const [y, m] = month.split('-').map((n) => parseInt(n, 10));
-  return `${MONTHS_RU[(m ?? 1) - 1] ?? ''} ${y ?? ''}`;
+  return `${monthNom((m ?? 1) - 1)} ${y ?? ''}`;
 }

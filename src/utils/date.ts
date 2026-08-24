@@ -54,6 +54,24 @@ const MONTHS_GEN: Record<DateLocale, string[]> = {
     'December',
   ],
 };
+// Nominative month names (the History month header: "Август 2026" / "August 2026").
+const MONTHS_NOM: Record<DateLocale, string[]> = {
+  ru: [
+    'Январь',
+    'Февраль',
+    'Март',
+    'Апрель',
+    'Май',
+    'Июнь',
+    'Июль',
+    'Август',
+    'Сентябрь',
+    'Октябрь',
+    'Ноябрь',
+    'Декабрь',
+  ],
+  en: MONTHS_GEN.en, // English has no separate genitive form
+};
 const WEEKDAYS_SHORT: Record<DateLocale, string[]> = {
   ru: ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'],
   en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
@@ -73,6 +91,11 @@ export function setDateLocale(locale: DateLocale): void {
 /** Genitive month name for the active locale (0-based month). */
 export function monthGen(month: number): string {
   return MONTHS_GEN[dateLocale][((month % 12) + 12) % 12] ?? '';
+}
+
+/** Nominative month name for the active locale (0-based month). */
+export function monthNom(month: number): string {
+  return MONTHS_NOM[dateLocale][((month % 12) + 12) % 12] ?? '';
 }
 
 /** 'пн' / 'Mon' short weekday name for the active locale. */

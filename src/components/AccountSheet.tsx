@@ -1,4 +1,5 @@
 import { useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   BottomSheetBackdrop,
@@ -19,6 +20,7 @@ import { useDataStore } from '@stores/data.store';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
 import { numberTextStyle, Radius, Spacing, Typography } from '@theme';
+import { displayAccountName } from '@utils/displayName';
 import { hapticLight, hapticSuccess } from '@utils/haptics';
 import {
   amountPlaceholder,
@@ -27,10 +29,11 @@ import {
   sanitizeAmountInput,
 } from '@utils/money';
 
-const ACCOUNT_KINDS: { kind: Account['kind']; label: string; icon: IoniconName }[] = [
-  { kind: 'cash', label: 'Наличные', icon: ACCOUNT_KIND_ICONS.cash },
-  { kind: 'card', label: 'Карта', icon: ACCOUNT_KIND_ICONS.card },
-  { kind: 'wallet', label: 'Кошелёк', icon: ACCOUNT_KIND_ICONS.wallet },
+type KindKey = 'accountSheet.kindCash' | 'accountSheet.kindCard' | 'accountSheet.kindWallet';
+const ACCOUNT_KINDS: { kind: Account['kind']; labelKey: KindKey; icon: IoniconName }[] = [
+  { kind: 'cash', labelKey: 'accountSheet.kindCash', icon: ACCOUNT_KIND_ICONS.cash },
+  { kind: 'card', labelKey: 'accountSheet.kindCard', icon: ACCOUNT_KIND_ICONS.card },
+  { kind: 'wallet', labelKey: 'accountSheet.kindWallet', icon: ACCOUNT_KIND_ICONS.wallet },
 ];
 
 /**
@@ -40,6 +43,7 @@ const ACCOUNT_KINDS: { kind: Account['kind']; label: string; icon: IoniconName }
  * transaction's frozen rate must not shift under it).
  */
 export function AccountSheet() {
+  const { t } = useTranslation();
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const baseCurrency = useSettingsStore((s) => s.baseCurrency);
@@ -50,6 +54,10 @@ export function AccountSheet() {
   const [currency, setCurrency] = useState(baseCurrency);
   const [kind, setKind] = useState<Account['kind']>('cash');
   const [opening, setOpening] = useState('');
+  // For a seeded account we pre-fill the field with the localized display name;
+  // { stored, display } lets onSubmit keep the original stored name when the
+  // user leaves it unchanged, so its localization is preserved.
+  const seedNameRef = useRef<{ stored: string; display: string } | null>(null);
 
   useImperativeHandle(
     accountSheetRef,
@@ -59,14 +67,17 @@ export function AccountSheet() {
           ? useDataStore.getState().accounts.find((a) => a.id === accountId)
           : undefined;
         if (account) {
+          const display = displayAccountName(account);
           setEditingId(account.id);
-          setName(account.name);
+          setName(display);
+          seedNameRef.current = { stored: account.name, display };
           setCurrency(account.currency);
           setKind(account.kind);
           setOpening(minorToAmountInput(account.openingMinor, account.currency));
         } else {
           setEditingId(null);
           setName('');
+          seedNameRef.current = null;
           setCurrency(useSettingsStore.getState().baseCurrency);
           setKind('cash');
           setOpening('');
@@ -80,15 +91,21 @@ export function AccountSheet() {
 
   const onSubmit = async () => {
     const openingMinor = parseAmountToMinor(opening, currency) ?? 0;
+    // Unchanged localized name → keep the original stored name (preserve i18n).
+    const typed = name.trim();
+    const resolvedName =
+      seedNameRef.current && typed === seedNameRef.current.display
+        ? seedNameRef.current.stored
+        : typed || currency;
     if (editingId) {
       await TransactionsController.updateAccount(editingId, {
-        name: name.trim() || currency,
+        name: resolvedName,
         kind,
         openingMinor,
       });
     } else {
       await TransactionsController.createAccount({
-        name: name.trim() || currency,
+        name: resolvedName,
         currency,
         kind,
         openingMinor,
@@ -102,29 +119,28 @@ export function AccountSheet() {
     if (!editingId) return;
     const accounts = useDataStore.getState().accounts;
     if (accounts.length <= 1) {
-      Alert.alert('Нельзя удалить счёт', 'Это ваш единственный счёт. Сначала создайте другой.');
+      Alert.alert(t('accountSheet.cannotDeleteTitle'), t('accountSheet.cannotDeleteBody'));
       return;
     }
-    Alert.alert(
-      'Удалить счёт?',
-      'Счёт скроется из кошелька, чипсов и фильтров. Записи по нему останутся в истории — курсы и суммы не переписываются.',
-      [
-        { text: 'Отмена', style: 'cancel' },
-        {
-          text: 'Удалить',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await TransactionsController.deleteAccount(editingId);
-              sheetRef.current?.dismiss();
-              hapticSuccess();
-            } catch (e) {
-              Alert.alert('Не удалось удалить', e instanceof Error ? e.message : 'Ошибка.');
-            }
-          },
+    Alert.alert(t('accountSheet.deleteConfirmTitle'), t('accountSheet.deleteConfirmBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
+      {
+        text: t('common.delete'),
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await TransactionsController.deleteAccount(editingId);
+            sheetRef.current?.dismiss();
+            hapticSuccess();
+          } catch (e) {
+            Alert.alert(
+              t('accountSheet.deleteFailedTitle'),
+              e instanceof Error ? e.message : t('accountSheet.genericError'),
+            );
+          }
         },
-      ],
-    );
+      },
+    ]);
   };
 
   const renderBackdrop = (props: BottomSheetBackdropProps) => (
@@ -144,24 +160,26 @@ export function AccountSheet() {
       handleIndicatorStyle={styles.handle}
     >
       <BottomSheetView style={styles.form}>
-        <Text style={styles.heading}>{editingId ? 'Счёт' : 'Новый счёт'}</Text>
+        <Text style={styles.heading}>
+          {editingId ? t('accountSheet.title') : t('accountSheet.titleNew')}
+        </Text>
         <BottomSheetTextInput
           style={styles.input}
           value={name}
           onChangeText={setName}
-          placeholder="Название (напр. Наличные USD)"
+          placeholder={t('accountSheet.namePlaceholder')}
           placeholderTextColor={palette.dim2}
         />
-        <Text style={styles.formLabel}>ВАЛЮТА</Text>
+        <Text style={styles.formLabel}>{t('accountSheet.currencyLabel')}</Text>
         {editingId ? (
           <View style={styles.currencyLocked}>
             <Text style={styles.currencyLockedText}>{currency}</Text>
-            <Text style={styles.currencyLockedHint}>валюту счёта менять нельзя</Text>
+            <Text style={styles.currencyLockedHint}>{t('accountSheet.currencyLockedHint')}</Text>
           </View>
         ) : (
           <CurrencyDropdown value={currency} onChange={setCurrency} />
         )}
-        <Text style={styles.formLabel}>СТАРТОВЫЙ БАЛАНС</Text>
+        <Text style={styles.formLabel}>{t('accountSheet.openingBalanceLabel')}</Text>
         <View style={styles.amountRow}>
           <BottomSheetTextInput
             style={styles.amountInput}
@@ -173,7 +191,7 @@ export function AccountSheet() {
           />
           <Text style={styles.amountCurrency}>{currency}</Text>
         </View>
-        <Text style={styles.formLabel}>ТИП</Text>
+        <Text style={styles.formLabel}>{t('accountSheet.kindLabel')}</Text>
         <View style={styles.kindRow}>
           {ACCOUNT_KINDS.map((k) => {
             const active = k.kind === kind;
@@ -187,17 +205,21 @@ export function AccountSheet() {
                 style={[styles.kindChip, active && styles.kindChipActive]}
               >
                 <AppIcon name={k.icon} color={active ? palette.btnInk : palette.dim} size={15} />
-                <Text style={[styles.kindText, active && styles.kindTextActive]}>{k.label}</Text>
+                <Text style={[styles.kindText, active && styles.kindTextActive]}>
+                  {t(k.labelKey)}
+                </Text>
               </Pressable>
             );
           })}
         </View>
         <Pressable onPress={onSubmit} style={styles.create}>
-          <Text style={styles.createText}>{editingId ? 'Сохранить' : 'Создать'}</Text>
+          <Text style={styles.createText}>
+            {editingId ? t('common.save') : t('accountSheet.create')}
+          </Text>
         </Pressable>
         {editingId && (
           <Pressable onPress={onDelete} style={styles.delete}>
-            <Text style={styles.deleteText}>Удалить счёт</Text>
+            <Text style={styles.deleteText}>{t('accountSheet.deleteAccount')}</Text>
           </Pressable>
         )}
       </BottomSheetView>

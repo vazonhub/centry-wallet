@@ -1,5 +1,5 @@
 import type { Account, Category, Transaction } from '@models';
-import { type BudgetPlan, periodLabel } from '@utils/budget';
+import { type BudgetPlan } from '@utils/budget';
 import { computeAllowance } from '@utils/summary';
 
 /**
@@ -56,6 +56,16 @@ export interface BuildSnapshotInput {
   plan: BudgetPlan;
   todayLocalDay: string;
   now: Date;
+  /** Localized period word for the widget ("месяц" / "month"). */
+  periodLabel: string;
+  /** Localized "transfer" label for feed rows. */
+  transferLabel: string;
+  /** Localized "no category" fallback for feed rows. */
+  noCategoryLabel: string;
+  /** Localized display name for an account (seed names → UI language). */
+  resolveAccountName: (account: Account) => string;
+  /** Localized display name for a category. */
+  resolveCategoryName: (category: Category) => string;
 }
 
 /** Icon for a feed row, mirroring the home screen mapping. */
@@ -65,9 +75,15 @@ function rowIcon(t: Transaction, category: Category | undefined): string {
 }
 
 /** Human label for a feed row, mirroring the home screen mapping. */
-function rowNote(t: Transaction, category: Category | undefined): string {
-  if (t.kind === 'transfer') return 'Перевод';
-  return t.note || category?.name || 'Без категории';
+function rowNote(
+  t: Transaction,
+  category: Category | undefined,
+  transferLabel: string,
+  noCategoryLabel: string,
+  resolveCategoryName: (category: Category) => string,
+): string {
+  if (t.kind === 'transfer') return transferLabel;
+  return t.note || (category ? resolveCategoryName(category) : '') || noCategoryLabel;
 }
 
 /** Builds the widget snapshot from the current data store slice. Pure. */
@@ -86,7 +102,7 @@ export function buildWidgetSnapshot(input: BuildSnapshotInput): WidgetSnapshot {
   const categoryById = new Map(input.categories.map((c) => [c.id, c]));
 
   const accounts: WidgetAccountSnapshot[] = input.accounts.map((a) => ({
-    name: a.name,
+    name: input.resolveAccountName(a),
     balanceMinor: input.balances[a.id] ?? 0,
     currency: a.currency,
   }));
@@ -95,7 +111,13 @@ export function buildWidgetSnapshot(input: BuildSnapshotInput): WidgetSnapshot {
     const category = t.categoryId ? categoryById.get(t.categoryId) : undefined;
     return {
       icon: rowIcon(t, category),
-      note: rowNote(t, category),
+      note: rowNote(
+        t,
+        category,
+        input.transferLabel,
+        input.noCategoryLabel,
+        input.resolveCategoryName,
+      ),
       amountMinor: t.amountMinor,
       currency: t.currency,
     };
@@ -107,7 +129,7 @@ export function buildWidgetSnapshot(input: BuildSnapshotInput): WidgetSnapshot {
     daysLeft,
     todaySpentMinor,
     periodRemainingMinor,
-    periodLabel: periodLabel(input.plan.period),
+    periodLabel: input.periodLabel,
     accounts,
     recent,
     updatedAt: Math.floor(input.now.getTime() / 1000),

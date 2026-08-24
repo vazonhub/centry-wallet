@@ -1,8 +1,10 @@
 import { AccountsRepo, CategoriesRepo, TransactionsRepo } from '@db';
+import i18n from '@i18n';
 import { writeAndShareCsv } from '@services/export';
 import { useSettingsStore } from '@stores/settings.store';
 import { buildTransactionsCsv } from '@utils/csv';
 import { currentTzOffsetMin, todayLocalDay } from '@utils/date';
+import { displayAccountName, displayCategoryName } from '@utils/displayName';
 
 export type ExportCsvStatus = 'shared' | 'unavailable' | 'empty';
 
@@ -27,6 +29,26 @@ async function exportTransactionsCsv(): Promise<ExportCsvStatus> {
     categories,
     baseCurrency: useSettingsStore.getState().baseCurrency,
     tzOffsetMin: currentTzOffsetMin(),
+    columns: [
+      i18n.t('csv.date'),
+      i18n.t('csv.time'),
+      i18n.t('csv.type'),
+      i18n.t('csv.account'),
+      i18n.t('csv.category'),
+      i18n.t('csv.amount'),
+      i18n.t('csv.currency'),
+      i18n.t('csv.amountBase'),
+      i18n.t('csv.baseCurrency'),
+      i18n.t('csv.rate'),
+      i18n.t('csv.note'),
+    ],
+    kindLabels: {
+      expense: i18n.t('csv.kindExpense'),
+      income: i18n.t('csv.kindIncome'),
+      transfer: i18n.t('csv.kindTransfer'),
+    },
+    resolveAccountName: displayAccountName,
+    resolveCategoryName: displayCategoryName,
   });
 
   return writeAndShareCsv(`centry-${todayLocalDay()}.csv`, csv);

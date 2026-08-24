@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import { DEFAULT_BASE_CURRENCY } from '@constants/currencies';
 import { SETTINGS_DEFAULTS, type ThemeChoice } from '@constants/settings';
+import { applyLanguage, getSystemLanguage, type LanguageChoice } from '@i18n';
 import { mmkvStorage } from '@storage/zustandMmkv';
 import { type BudgetPlan, defaultBudgetPlan } from '@utils/budget';
 
@@ -35,6 +36,8 @@ interface SettingsState {
   onboardingDone: boolean;
   theme: ThemeChoice;
   resolvedScheme: ResolvedScheme;
+  /** UI language (RU / EN). Drives i18n + money/date formatting. */
+  language: LanguageChoice;
   hideAmounts: boolean;
   inputSiri: boolean;
   inputEveningPush: boolean;
@@ -47,6 +50,7 @@ interface SettingsState {
   setBudgetPlan(p: BudgetPlan): void;
   completeOnboarding(): void;
   setTheme(t: ThemeChoice): void;
+  setLanguage(l: LanguageChoice): void;
   setHideAmounts(v: boolean): void;
   setInputSiri(v: boolean): void;
   setInputEveningPush(v: boolean): void;
@@ -62,6 +66,7 @@ export const useSettingsStore = create<SettingsState>()(
       onboardingDone: false,
       theme: SETTINGS_DEFAULTS.theme,
       resolvedScheme: resolve(SETTINGS_DEFAULTS.theme),
+      language: getSystemLanguage(),
       hideAmounts: SETTINGS_DEFAULTS.hideAmounts,
       inputSiri: SETTINGS_DEFAULTS.inputSiri,
       inputEveningPush: SETTINGS_DEFAULTS.inputEveningPush,
@@ -82,6 +87,10 @@ export const useSettingsStore = create<SettingsState>()(
           setTimeout(() => Appearance.setColorScheme(theme), 150);
         }
       },
+      setLanguage: (language) => {
+        applyLanguage(language);
+        set({ language });
+      },
       setHideAmounts: (hideAmounts) => set({ hideAmounts }),
       setInputSiri: (inputSiri) => set({ inputSiri }),
       setInputEveningPush: (inputEveningPush) => set({ inputEveningPush }),
@@ -93,6 +102,9 @@ export const useSettingsStore = create<SettingsState>()(
       storage: createJSONStorage(() => mmkvStorage),
       onRehydrateStorage: () => (state) => {
         if (!state) return;
+        // Sync i18n + money/date formatting with the persisted language (safe:
+        // no native calls, unlike the theme's Appearance flip below).
+        applyLanguage(state.language);
         // Reconcile only the JS-side resolved scheme here. Do NOT touch the
         // native `Appearance` during rehydration: this runs at module-init time,
         // before the root view is attached, and an early setColorScheme can

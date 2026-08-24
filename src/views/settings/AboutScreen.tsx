@@ -3,6 +3,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
+import { useTranslation } from 'react-i18next';
 
 import { ScreenHeader } from '@components/ScreenHeader';
 import { usePalette } from '@hooks/usePalette';
@@ -16,11 +17,12 @@ export function AboutScreen() {
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const version = Constants.expoConfig?.version ?? '0.1.0';
 
   return (
     <View style={styles.canvas}>
-      <ScreenHeader title="О приложении" />
+      <ScreenHeader title={t('about.title')} />
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
@@ -28,7 +30,7 @@ export function AboutScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.section}>ССЫЛКИ</Text>
+        <Text style={styles.section}>{t('about.links')}</Text>
         <View style={styles.card}>
           <Pressable style={styles.navRow} onPress={() => void Linking.openURL(TELEGRAM_URL)}>
             <Ionicons name="paper-plane-outline" size={20} color={palette.accent} />
@@ -43,18 +45,15 @@ export function AboutScreen() {
           </Pressable>
         </View>
 
-        <Text style={styles.section}>О ПРИЛОЖЕНИИ</Text>
+        <Text style={styles.section}>{t('about.appInfo')}</Text>
         <View style={styles.card}>
           <View style={styles.row}>
-            <Text style={styles.label}>Версия</Text>
+            <Text style={styles.label}>{t('about.version')}</Text>
             <Text style={styles.value}>{version}</Text>
           </View>
         </View>
 
-        <Text style={styles.footnote}>
-          Centry — офлайновый трекер. Данные не покидают телефон. Единственный сетевой запрос —
-          анонимные курсы валют (наружу уходят только коды валют).
-        </Text>
+        <Text style={styles.footnote}>{t('about.footnote')}</Text>
       </ScrollView>
     </View>
   );

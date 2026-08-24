@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 
+import i18n from '@i18n';
 import { useSettingsStore } from '@stores/settings.store';
 
 /**
@@ -39,8 +40,8 @@ export function parseHhMm(time: string): HhMm {
 /** The reminder's notification content. Pure so the copy can be unit-tested. */
 export function buildReminderContent(): Notifications.NotificationContentInput {
   return {
-    title: 'Что сегодня потратил?',
-    body: 'Запишите траты за день — это займёт пару секунд.',
+    title: i18n.t('notifications.reminderTitle'),
+    body: i18n.t('notifications.reminderBody'),
     sound: false,
     // Read by useNotificationResponse to open the input sheet on tap.
     data: { url: ADD_DEEP_LINK },

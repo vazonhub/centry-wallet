@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -17,6 +18,7 @@ import { hapticLight, hapticSuccess } from '@utils/haptics';
  * renders nothing once completed/skipped.
  */
 export function OnboardingScreen() {
+  const { t } = useTranslation();
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
 
@@ -49,22 +51,18 @@ export function OnboardingScreen() {
     <View style={styles.overlay}>
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-          <Text style={styles.title}>Добро пожаловать в Centry</Text>
-          <Text style={styles.lead}>
-            Centry показывает одну цифру — сколько можно потратить сегодня. Она считается просто:
-            запланированный бюджет делится на дни периода (неделя или месяц). Задайте план — это
-            всегда можно изменить позже.
-          </Text>
+          <Text style={styles.title}>{t('onboarding.title')}</Text>
+          <Text style={styles.lead}>{t('onboarding.lead')}</Text>
 
           <BudgetPlanEditor value={plan} onChange={setPlan} baseCurrency={baseCurrency} />
         </ScrollView>
 
         <View style={styles.actions}>
           <Pressable onPress={onStart} style={styles.primary}>
-            <Text style={styles.primaryText}>Начать</Text>
+            <Text style={styles.primaryText}>{t('onboarding.start')}</Text>
           </Pressable>
           <Pressable onPress={onSkip} style={styles.skip}>
-            <Text style={styles.skipText}>Пропустить</Text>
+            <Text style={styles.skipText}>{t('onboarding.skip')}</Text>
           </Pressable>
         </View>
       </SafeAreaView>

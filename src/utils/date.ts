@@ -20,51 +20,102 @@ export const todayLocalDay = (): string => localDay(nowSec(), currentTzOffsetMin
 /** 'YYYY-MM' prefix from a 'YYYY-MM-DD' local day, for month queries. */
 export const monthPrefix = (localDayStr: string): string => localDayStr.slice(0, 7);
 
-// --- Russian date formatting (display only) --------------------------------
+// --- Localized date formatting (display only) ------------------------------
 
-const RU_MONTHS_GEN = [
-  'января',
-  'февраля',
-  'марта',
-  'апреля',
-  'мая',
-  'июня',
-  'июля',
-  'августа',
-  'сентября',
-  'октября',
-  'ноября',
-  'декабря',
-];
-const RU_WEEKDAYS_SHORT = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
-const RU_WEEKDAYS_FULL = [
-  'воскресенье',
-  'понедельник',
-  'вторник',
-  'среда',
-  'четверг',
-  'пятница',
-  'суббота',
-];
+export type DateLocale = 'ru' | 'en';
 
-/** 'PN' short weekday name (пн, вт, …). */
-export function weekdayShort(weekday: number): string {
-  return RU_WEEKDAYS_SHORT[((weekday % 7) + 7) % 7] ?? '';
+const MONTHS_GEN: Record<DateLocale, string[]> = {
+  ru: [
+    'января',
+    'февраля',
+    'марта',
+    'апреля',
+    'мая',
+    'июня',
+    'июля',
+    'августа',
+    'сентября',
+    'октября',
+    'ноября',
+    'декабря',
+  ],
+  en: [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ],
+};
+// Nominative month names (the History month header: "Август 2026" / "August 2026").
+const MONTHS_NOM: Record<DateLocale, string[]> = {
+  ru: [
+    'Январь',
+    'Февраль',
+    'Март',
+    'Апрель',
+    'Май',
+    'Июнь',
+    'Июль',
+    'Август',
+    'Сентябрь',
+    'Октябрь',
+    'Ноябрь',
+    'Декабрь',
+  ],
+  en: MONTHS_GEN.en, // English has no separate genitive form
+};
+const WEEKDAYS_SHORT: Record<DateLocale, string[]> = {
+  ru: ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'],
+  en: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+};
+const WEEKDAYS_FULL: Record<DateLocale, string[]> = {
+  ru: ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'],
+  en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+};
+
+let dateLocale: DateLocale = 'ru';
+
+/** Switches the language of month/weekday names. Called from the i18n wiring. */
+export function setDateLocale(locale: DateLocale): void {
+  dateLocale = locale;
 }
 
-/** 'понедельник' full weekday name. */
+/** Genitive month name for the active locale (0-based month). */
+export function monthGen(month: number): string {
+  return MONTHS_GEN[dateLocale][((month % 12) + 12) % 12] ?? '';
+}
+
+/** Nominative month name for the active locale (0-based month). */
+export function monthNom(month: number): string {
+  return MONTHS_NOM[dateLocale][((month % 12) + 12) % 12] ?? '';
+}
+
+/** 'пн' / 'Mon' short weekday name for the active locale. */
+export function weekdayShort(weekday: number): string {
+  return WEEKDAYS_SHORT[dateLocale][((weekday % 7) + 7) % 7] ?? '';
+}
+
+/** 'понедельник' / 'Monday' full weekday name for the active locale. */
 export function weekdayFull(weekday: number): string {
-  return RU_WEEKDAYS_FULL[((weekday % 7) + 7) % 7] ?? '';
+  return WEEKDAYS_FULL[dateLocale][((weekday % 7) + 7) % 7] ?? '';
 }
 
 /** e.g. "29 августа (сб)" — a day rendered as a real date with weekday. */
 export function formatDayMonthWeekday(date: Date): string {
-  return `${date.getDate()} ${RU_MONTHS_GEN[date.getMonth()]} (${weekdayShort(date.getDay())})`;
+  return `${date.getDate()} ${monthGen(date.getMonth())} (${weekdayShort(date.getDay())})`;
 }
 
 /** e.g. "20 августа, среда" — today's date for the home info line. */
 export function formatTodayHuman(date: Date = new Date()): string {
-  return `${date.getDate()} ${RU_MONTHS_GEN[date.getMonth()]}, ${weekdayFull(date.getDay())}`;
+  return `${date.getDate()} ${monthGen(date.getMonth())}, ${weekdayFull(date.getDay())}`;
 }
 
 /**
@@ -79,7 +130,7 @@ export function formatTodayCompact(tier: 0 | 1 | 2, date: Date = new Date()): st
   const dd = String(date.getDate()).padStart(2, '0');
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const wd = weekdayShort(date.getDay()).toUpperCase();
-  if (tier <= 0) return `${date.getDate()} ${RU_MONTHS_GEN[date.getMonth()]}, ${wd}`;
+  if (tier <= 0) return `${date.getDate()} ${monthGen(date.getMonth())}, ${wd}`;
   if (tier === 1) return `${dd}.${mm} ${wd}`;
   return `${dd}.${mm}`;
 }

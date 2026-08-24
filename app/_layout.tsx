@@ -9,6 +9,8 @@ import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
 
+import '@i18n';
+
 import { useAppBootstrap } from '@hooks/useAppBootstrap';
 import { useNotificationResponse } from '@hooks/useNotificationResponse';
 import { useIsDark, usePalette } from '@hooks/usePalette';

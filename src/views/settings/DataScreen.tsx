@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 import { ScreenHeader } from '@components/ScreenHeader';
 import { DataController } from '@controllers/data.controller';
@@ -22,15 +23,16 @@ export function DataScreen() {
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [isExporting, setIsExporting] = useState(false);
   const [widgetRefreshed, setWidgetRefreshed] = useState(false);
   const refreshedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const onDeleteAll = () => {
-    Alert.alert('Удалить все данные?', 'Счета, категории и записи будут стёрты. Отменить нельзя.', [
-      { text: 'Отмена', style: 'cancel' },
+    Alert.alert(t('data.deleteAllTitle'), t('data.deleteAllBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Удалить всё',
+        text: t('data.deleteAllConfirm'),
         style: 'destructive',
         onPress: () => void DataController.resetAllData(),
       },
@@ -43,14 +45,18 @@ export function DataScreen() {
     try {
       const status = await ExportController.exportTransactionsCsv();
       if (status === 'empty') {
-        Alert.alert('Нечего экспортировать', 'Пока нет ни одной записи.', [{ text: 'Понятно' }]);
+        Alert.alert(t('data.exportEmptyTitle'), t('data.exportEmptyBody'), [
+          { text: t('common.ok') },
+        ]);
       } else if (status === 'unavailable') {
-        Alert.alert('Экспорт недоступен', 'Поделиться файлом на этом устройстве нельзя.', [
-          { text: 'Понятно' },
+        Alert.alert(t('data.exportUnavailableTitle'), t('data.exportUnavailableBody'), [
+          { text: t('common.ok') },
         ]);
       }
     } catch {
-      Alert.alert('Не удалось экспортировать', 'Попробуйте ещё раз.', [{ text: 'Понятно' }]);
+      Alert.alert(t('data.exportFailedTitle'), t('data.exportFailedBody'), [
+        { text: t('common.ok') },
+      ]);
     } finally {
       setIsExporting(false);
     }
@@ -66,7 +72,7 @@ export function DataScreen() {
 
   return (
     <View style={styles.canvas}>
-      <ScreenHeader title="Данные" />
+      <ScreenHeader title={t('data.title')} />
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
@@ -74,36 +80,31 @@ export function DataScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.section}>ЭКСПОРТ</Text>
+        <Text style={styles.section}>{t('data.exportSection')}</Text>
         <View style={styles.card}>
           <Pressable onPress={onExportCsv} disabled={isExporting} style={styles.row}>
-            <Text style={styles.label}>Экспорт в CSV</Text>
+            <Text style={styles.label}>{t('data.exportCsv')}</Text>
             {isExporting ? (
               <ActivityIndicator color={palette.dim2} />
             ) : (
-              <Text style={styles.action}>Поделиться</Text>
+              <Text style={styles.action}>{t('data.share')}</Text>
             )}
           </Pressable>
-          <Text style={styles.cardHint}>
-            Выгружает все записи в CSV-файл (открывается в Excel или Google Таблицах) и показывает
-            меню «Поделиться». Импорт добавим позже.
-          </Text>
+          <Text style={styles.cardHint}>{t('data.exportHint')}</Text>
         </View>
 
-        <Text style={styles.section}>ДАННЫЕ</Text>
+        <Text style={styles.section}>{t('data.dataSection')}</Text>
         <View style={styles.card}>
           <Pressable onPress={onRefreshWidget} style={styles.row}>
-            <Text style={styles.label}>Обновить виджет</Text>
+            <Text style={styles.label}>{t('data.refreshWidget')}</Text>
             <Text style={[styles.action, widgetRefreshed && styles.actionDone]}>
-              {widgetRefreshed ? 'Обновлено ✓' : 'Обновить'}
+              {widgetRefreshed ? t('data.refreshed') : t('data.refresh')}
             </Text>
           </Pressable>
-          <Text style={styles.cardHint}>
-            Виджет обновляется сам после каждой записи. Нажмите, если iOS ещё не перерисовал его.
-          </Text>
+          <Text style={styles.cardHint}>{t('data.refreshHint')}</Text>
           <View style={styles.separator} />
           <Pressable onPress={onDeleteAll} style={styles.row}>
-            <Text style={styles.danger}>Удалить все данные</Text>
+            <Text style={styles.danger}>{t('data.deleteAll')}</Text>
           </Pressable>
         </View>
       </ScrollView>

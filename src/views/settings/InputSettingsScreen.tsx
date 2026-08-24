@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 import { ScreenHeader } from '@components/ScreenHeader';
 import { usePalette } from '@hooks/usePalette';
@@ -77,6 +78,7 @@ export function InputSettingsScreen() {
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const s = useSettingsStore();
 
   // The reminder time is edited in a modal, committed on "Готово". The row shows
@@ -106,7 +108,7 @@ export function InputSettingsScreen() {
 
   return (
     <View style={styles.canvas}>
-      <ScreenHeader title="Ввод" />
+      <ScreenHeader title={t('inputSettings.title')} />
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
@@ -114,26 +116,23 @@ export function InputSettingsScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.section}>SIRI И КОМАНДЫ</Text>
+        <Text style={styles.section}>{t('inputSettings.siriSection')}</Text>
         <View style={styles.card}>
           <View style={styles.row}>
-            <Text style={styles.label}>Добавлять голосом</Text>
+            <Text style={styles.label}>{t('inputSettings.siriToggle')}</Text>
             <Switch
               value={s.inputSiri}
               onValueChange={s.setInputSiri}
               trackColor={{ true: palette.accent, false: palette.dim2 }}
             />
           </View>
-          <Text style={styles.cardHint}>
-            «Привет, Siri, добавить трату в Centry» — откроется ввод, заполненный из фразы. Работает
-            на устройстве (iOS 18+). Выключено — Siri открывает пустой ввод.
-          </Text>
+          <Text style={styles.cardHint}>{t('inputSettings.siriHint')}</Text>
         </View>
 
-        <Text style={styles.section}>НАПОМИНАНИЕ</Text>
+        <Text style={styles.section}>{t('inputSettings.reminderSection')}</Text>
         <View style={styles.card}>
           <View style={styles.row}>
-            <Text style={styles.label}>Вечернее напоминание</Text>
+            <Text style={styles.label}>{t('inputSettings.reminderToggle')}</Text>
             <Switch
               value={s.inputEveningPush}
               onValueChange={(v) => {
@@ -145,13 +144,11 @@ export function InputSettingsScreen() {
           </View>
           {s.inputEveningPush && (
             <Pressable onPress={openPicker} style={[styles.row, styles.rowTop]}>
-              <Text style={styles.label}>Время</Text>
+              <Text style={styles.label}>{t('inputSettings.reminderTimeLabel')}</Text>
               <Text style={styles.time}>{s.eveningPushTime}</Text>
             </Pressable>
           )}
-          <Text style={styles.cardHint}>
-            Локальное напоминание записать траты за день. Ничего не отправляется в сеть.
-          </Text>
+          <Text style={styles.cardHint}>{t('inputSettings.reminderHint')}</Text>
         </View>
       </ScrollView>
 
@@ -166,7 +163,7 @@ export function InputSettingsScreen() {
               the wheels' touches. */}
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setPickerOpen(false)} />
           <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>Время напоминания</Text>
+            <Text style={styles.sheetTitle}>{t('inputSettings.reminderTitle')}</Text>
             <View style={styles.wheels}>
               <WheelColumn
                 key={`h-${nonce}`}
@@ -187,10 +184,10 @@ export function InputSettingsScreen() {
             </View>
             <View style={styles.actions}>
               <Pressable onPress={() => setPickerOpen(false)} style={styles.action}>
-                <Text style={styles.actionMuted}>Отмена</Text>
+                <Text style={styles.actionMuted}>{t('common.cancel')}</Text>
               </Pressable>
               <Pressable onPress={commitPicker} style={styles.action}>
-                <Text style={styles.actionPrimary}>Готово</Text>
+                <Text style={styles.actionPrimary}>{t('common.done')}</Text>
               </Pressable>
             </View>
           </View>

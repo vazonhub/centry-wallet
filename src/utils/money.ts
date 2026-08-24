@@ -149,6 +149,28 @@ export function getMinorUnits(currency: string): number {
   return MINOR_UNITS[currency.toUpperCase()] ?? 2;
 }
 
+// --- Locale-aware separators (rule 7: money formatting only lives here) -------
+// The integer math never changes; only the grouping/decimal characters do. The
+// active locale is set once from the language setting (src/i18n) so every money
+// surface reads the same style without threading a locale through every call.
+
+export type MoneyLocale = 'ru' | 'en';
+
+const SEPARATORS: Record<MoneyLocale, { decimal: string; group: string }> = {
+  ru: { decimal: ',', group: ' ' }, // "1 234,56"
+  en: { decimal: '.', group: ',' }, // "1,234.56"
+};
+
+let moneyLocale: MoneyLocale = 'ru';
+
+/** Switches the money formatting style. Called from the i18n language wiring. */
+export function setMoneyLocale(locale: MoneyLocale): void {
+  moneyLocale = locale;
+}
+
+const decimalSep = (): string => SEPARATORS[moneyLocale].decimal;
+const groupSep = (): string => SEPARATORS[moneyLocale].group;
+
 /**
  * Parses a user-typed amount (major units, e.g. "12,50" or "12.5") into integer
  * minor units for the given currency. Accepts comma or dot as the decimal
@@ -214,7 +236,7 @@ export function minorToAmountInput(minor: number, currency: string): string {
 /** Placeholder for an amount field, e.g. "0,00" (integer + fraction shape). */
 export function amountPlaceholder(currency: string): string {
   const units = getMinorUnits(currency);
-  return units > 0 ? `0,${'0'.repeat(units)}` : '0';
+  return units > 0 ? `0${decimalSep()}${'0'.repeat(units)}` : '0';
 }
 
 export interface FormatMoneyOptions {
@@ -245,7 +267,7 @@ export function formatMoney(
   const fracPart = absMinor % divisor;
 
   const grouped = groupThousands(intPart.toString());
-  const fraction = units > 0 ? ',' + fracPart.toString().padStart(units, '0') : '';
+  const fraction = units > 0 ? decimalSep() + fracPart.toString().padStart(units, '0') : '';
 
   let sign = '';
   if (!opts.signless) {
@@ -274,9 +296,9 @@ export function formatMoneyPlain(minor: number, currency: string): string {
   return `${negative ? '-' : ''}${intPart.toString()}${fraction}`;
 }
 
-/** Inserts a thin space every three digits from the right. */
+/** Inserts the locale's group separator every three digits from the right. */
 function groupThousands(digits: string): string {
-  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, groupSep());
 }
 
 /** Suffix scales for the compact formatter, largest first. */
@@ -323,7 +345,7 @@ export function formatMoneyCompact(
 
   const whole = intMajor / scale;
   const tenth = ((intMajor % scale) * 10n) / scale; // 0..9, truncated toward zero
-  const numberStr = tenth > 0n ? `${whole},${tenth}` : `${whole}`;
+  const numberStr = tenth > 0n ? `${whole}${decimalSep()}${tenth}` : `${whole}`;
 
   let sign = '';
   if (!opts.signless) {

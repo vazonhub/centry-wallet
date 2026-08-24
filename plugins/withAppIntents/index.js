@@ -9,10 +9,14 @@ const path = require('path');
  * (not an extension) for Siri phrases to auto-register, so — unlike the widget
  * (@bacons/apple-targets) — they can't be a separate target. This plugin:
  *   1. copies the Swift sources into `ios/<app>/AppIntents/`,
- *   2. adds them to the app target's Sources build phase,
- *   3. adds `pod 'MMKVAppExtension'` (modular headers) to the app target so the
- *      intent can drop a prefill in the App-Group MMKV the app reads
- *      (src/services/intents).
+ *   2. adds them to the app target's Sources build phase.
+ *
+ * It links NOTHING extra. The intents pass their prefill through the
+ * `centry://add?…` deep link (OpenURLIntent, iOS 17+) — there is no App-Group
+ * MMKV writer, so nothing double-links MMKVCore into the main target. An earlier
+ * version added `pod 'MMKVAppExtension'` here; that second MMKVCore consumer
+ * (the app already links MMKVCore via react-native-mmkv) corrupted the heap at
+ * launch and is why Siri was disabled. Do NOT re-add a pod here.
  *
  * Idempotent and safe to re-run on `expo prebuild --clean`. It is a thin,
  * self-contained plugin: removing it from app.json fully disables Siri without
@@ -21,7 +25,6 @@ const path = require('path');
 
 const SWIFT_DIR = path.join(__dirname, 'swift');
 const GROUP_NAME = 'AppIntents';
-const POD_LINE = "  pod 'MMKVAppExtension', :modular_headers => true";
 
 function swiftFiles() {
   return fs.readdirSync(SWIFT_DIR).filter((f) => f.endsWith('.swift'));
@@ -64,28 +67,6 @@ function withSwiftSourcesInTarget(config) {
   });
 }
 
-/** Add the extension-safe MMKV pod to the app target (idempotent). */
-function withMmkvPod(config) {
-  return withDangerousMod(config, [
-    'ios',
-    (cfg) => {
-      const podfile = path.join(cfg.modRequest.platformProjectRoot, 'Podfile');
-      const appName = cfg.modRequest.projectName;
-      let contents = fs.readFileSync(podfile, 'utf8');
-      if (contents.includes("pod 'MMKVAppExtension'")) return cfg;
-
-      const anchor = new RegExp(`target ['"]${appName}['"] do`);
-      const match = anchor.exec(contents);
-      if (match) {
-        const insertAt = match.index + match[0].length;
-        contents = `${contents.slice(0, insertAt)}\n${POD_LINE}${contents.slice(insertAt)}`;
-        fs.writeFileSync(podfile, contents);
-      }
-      return cfg;
-    },
-  ]);
-}
-
 module.exports = function withAppIntents(config) {
-  return withMmkvPod(withSwiftSourcesInTarget(withSwiftSourcesCopied(config)));
+  return withSwiftSourcesInTarget(withSwiftSourcesCopied(config));
 };

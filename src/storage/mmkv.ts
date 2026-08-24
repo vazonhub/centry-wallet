@@ -38,22 +38,14 @@ export const WIDGET_SNAPSHOT_KEY = 'snapshot';
  */
 export const widgetStorage = new MMKV({ id: WIDGET_MMAP_ID, mode: Mode.MULTI_PROCESS });
 
-/**
- * MMKV mmapID for the Siri App-Intent prefill channel (etap 8). Single-process,
- * like {@link widgetStorage} (proven safe). NOTE: the native writer (the Swift
- * App Intent) is currently backed out — linking a second MMKVCore consumer into
- * the main target risked heap corruption at launch. The JS reader stays wired
- * and harmless (finds nothing) so Siri can be re-enabled once a channel that
- * doesn't double-link MMKVCore is in place. See docs/DECISIONS + memory
- * [[centry-siri-appintents]].
- */
-export const INTENT_MMAP_ID = 'centry.intent';
-
-/** MMKV key under which the App Intent would store the pending prefill JSON. */
-export const INTENT_PENDING_KEY = 'pending';
-
-/** App-Group MMKV instance for the Swift→JS App-Intent prefill channel. */
-export const intentStorage = new MMKV({ id: INTENT_MMAP_ID });
+// NOTE: the Siri App Intent (etap 8) intentionally has NO MMKV channel. An
+// earlier design wrote the prefill to an App-Group MMKV (`centry.intent`), which
+// required linking a second MMKVCore consumer (MMKVAppExtension) into the main
+// target — the app already links MMKVCore via react-native-mmkv, so two
+// consumers in one process corrupted the heap at launch and crashed Hermes. The
+// intent now passes the prefill entirely through the `centry://add?…` deep link
+// (src/utils/deepLink + useWidgetDeepLink); nothing is stored, nothing extra is
+// linked. See docs/DECISIONS + memory [[centry-siri-appintents]].
 
 /** Typed convenience wrappers over the settings store. */
 export const settingsStorage = {

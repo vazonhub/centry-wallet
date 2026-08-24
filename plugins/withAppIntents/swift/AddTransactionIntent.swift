@@ -13,9 +13,10 @@ import Foundation
 // (MMKVAppExtension) into the main target — the app already links MMKVCore via
 // react-native-mmkv, so two consumers in one process corrupted the heap and
 // crashed at launch. The URL carries everything, so nothing extra is linked.
-// OpenURLIntent requires iOS 17, hence the availability floor for Siri.
+// The OpenURLIntent(_:) initializer is iOS 18+ in the current SDK, hence the
+// iOS 18 availability floor for Siri (the main app stays on 15.1).
 
-@available(iOS 17.0, *)
+@available(iOS 18.0, *)
 enum CentryDeepLink {
   /// Builds `centry://add?kind=…[&amount=…][&note=…]`, percent-encoding via
   /// URLComponents. Falls back to a bare add link if composition ever fails.
@@ -38,7 +39,7 @@ enum CentryDeepLink {
   }
 }
 
-@available(iOS 17.0, *)
+@available(iOS 18.0, *)
 struct AddExpenseIntent: AppIntent {
   static var title: LocalizedStringResource = "Добавить трату"
   static var description = IntentDescription("Быстро записать расход в Centry.")
@@ -55,7 +56,7 @@ struct AddExpenseIntent: AppIntent {
   }
 }
 
-@available(iOS 17.0, *)
+@available(iOS 18.0, *)
 struct AddIncomeIntent: AppIntent {
   static var title: LocalizedStringResource = "Добавить доход"
   static var description = IntentDescription("Быстро записать доход в Centry.")

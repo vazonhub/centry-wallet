@@ -9,7 +9,6 @@ export const SETTINGS_KEYS = {
   baseCurrency: 'base_currency',
   paydayDay: 'payday_day',
   theme: 'theme',
-  inputWidget: 'input_widget',
   inputSiri: 'input_siri',
   inputEveningPush: 'input_evening_push',
   eveningPushTime: 'evening_push_time',
@@ -25,7 +24,6 @@ export type ThemeChoice = 'system' | 'light' | 'dark';
 export const SETTINGS_DEFAULTS = {
   baseCurrency: DEFAULT_BASE_CURRENCY,
   theme: 'system' as ThemeChoice,
-  inputWidget: true,
   inputSiri: true,
   inputEveningPush: true,
   eveningPushTime: '22:00',

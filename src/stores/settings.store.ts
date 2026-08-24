@@ -36,7 +36,6 @@ interface SettingsState {
   theme: ThemeChoice;
   resolvedScheme: ResolvedScheme;
   hideAmounts: boolean;
-  inputWidget: boolean;
   inputSiri: boolean;
   inputEveningPush: boolean;
   /** Evening reminder time as 'HH:MM' (24h). Drives the daily local push (etap 8). */
@@ -49,7 +48,6 @@ interface SettingsState {
   completeOnboarding(): void;
   setTheme(t: ThemeChoice): void;
   setHideAmounts(v: boolean): void;
-  setInputWidget(v: boolean): void;
   setInputSiri(v: boolean): void;
   setInputEveningPush(v: boolean): void;
   setEveningPushTime(t: string): void;
@@ -65,7 +63,6 @@ export const useSettingsStore = create<SettingsState>()(
       theme: SETTINGS_DEFAULTS.theme,
       resolvedScheme: resolve(SETTINGS_DEFAULTS.theme),
       hideAmounts: SETTINGS_DEFAULTS.hideAmounts,
-      inputWidget: SETTINGS_DEFAULTS.inputWidget,
       inputSiri: SETTINGS_DEFAULTS.inputSiri,
       inputEveningPush: SETTINGS_DEFAULTS.inputEveningPush,
       eveningPushTime: SETTINGS_DEFAULTS.eveningPushTime,
@@ -86,7 +83,6 @@ export const useSettingsStore = create<SettingsState>()(
         }
       },
       setHideAmounts: (hideAmounts) => set({ hideAmounts }),
-      setInputWidget: (inputWidget) => set({ inputWidget }),
       setInputSiri: (inputSiri) => set({ inputSiri }),
       setInputEveningPush: (inputEveningPush) => set({ inputEveningPush }),
       setEveningPushTime: (eveningPushTime) => set({ eveningPushTime }),

@@ -1,7 +1,15 @@
-import { useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import {
+  FlatList,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { ScreenHeader } from '@components/ScreenHeader';
 import { usePalette } from '@hooks/usePalette';
@@ -10,18 +18,53 @@ import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
 import { Radius, Spacing, TAB_BAR_HEIGHT, Typography } from '@theme';
 
-/** 'HH:MM' → today's Date at that time (seeds the picker). */
-function timeToDate(time: string): Date {
-  const { hour, minute } = parseHhMm(time);
-  const d = new Date();
-  d.setHours(hour, minute, 0, 0);
-  return d;
-}
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+const MINUTES = Array.from({ length: 60 }, (_, i) => i);
+const CHIP_W = 56;
+const pad2 = (n: number) => String(n).padStart(2, '0');
 
-/** Date → 'HH:MM' (24h, zero-padded). */
-function dateToTime(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+type Styles = ReturnType<typeof makeStyles>;
+
+/**
+ * Horizontal strip of tappable numbers — a custom replacement for the native
+ * time spinner, which renders broken on the New Architecture (the hour column
+ * gets stuck on a handful of values). Pure JS, so behaviour is deterministic.
+ */
+function NumberStrip({
+  values,
+  selected,
+  onSelect,
+  styles,
+}: {
+  values: number[];
+  selected: number;
+  onSelect: (n: number) => void;
+  styles: Styles;
+}) {
+  return (
+    <FlatList
+      horizontal
+      data={values}
+      extraData={selected}
+      keyExtractor={(n) => String(n)}
+      showsHorizontalScrollIndicator={false}
+      getItemLayout={(_, index) => ({ length: CHIP_W, offset: CHIP_W * index, index })}
+      initialScrollIndex={Math.max(0, values.indexOf(selected))}
+      contentContainerStyle={styles.stripContent}
+      renderItem={({ item }) => {
+        const on = item === selected;
+        return (
+          <Pressable
+            onPress={() => onSelect(item)}
+            style={[styles.chip, on && styles.chipOn]}
+            hitSlop={6}
+          >
+            <Text style={[styles.chipText, on && styles.chipTextOn]}>{pad2(item)}</Text>
+          </Pressable>
+        );
+      }}
+    />
+  );
 }
 
 export function InputSettingsScreen() {
@@ -30,27 +73,24 @@ export function InputSettingsScreen() {
   const insets = useSafeAreaInsets();
   const s = useSettingsStore();
 
-  // The time picker lives in a modal, committed on "Готово". Two things matter:
-  //   1. the row shows the stored 'HH:MM' string (source of truth), so the
-  //      displayed time is always correct regardless of picker rendering;
-  //   2. the spinner is UNCONTROLLED while scrolling — its `value` is seeded once
-  //      per open and never fed back on change. Re-passing `value` on every
-  //      onChange tick (a controlled picker) resets the native wheel on the New
-  //      Architecture, so it snaps back and only a few values stay reachable.
-  //      onChange writes a ref (no re-render); commit reads the ref.
+  // The reminder time is edited in a modal, committed on "Готово". The row shows
+  // the stored 'HH:MM' string (source of truth). The picker is a custom JS strip
+  // (NumberStrip) rather than the native DateTimePicker, which is unreliable on
+  // the New Architecture here.
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [seed, setSeed] = useState<Date>(() => timeToDate(s.eveningPushTime));
-  const draftRef = useRef<Date>(seed);
+  const initial = parseHhMm(s.eveningPushTime);
+  const [hour, setHour] = useState(initial.hour);
+  const [minute, setMinute] = useState(initial.minute);
 
   const openPicker = () => {
-    const d = timeToDate(s.eveningPushTime);
-    setSeed(d);
-    draftRef.current = d;
+    const { hour: h, minute: m } = parseHhMm(s.eveningPushTime);
+    setHour(h);
+    setMinute(m);
     setPickerOpen(true);
   };
 
   const commitPicker = () => {
-    s.setEveningPushTime(dateToTime(draftRef.current));
+    s.setEveningPushTime(`${pad2(hour)}:${pad2(minute)}`);
     void syncEveningReminder();
     setPickerOpen(false);
   };
@@ -110,24 +150,19 @@ export function InputSettingsScreen() {
         onRequestClose={() => setPickerOpen(false)}
       >
         <View style={styles.backdrop}>
-          {/* Dismiss on taps OUTSIDE the sheet. Kept as a sibling behind the
-              sheet — wrapping the picker in a Pressable steals the wheel's pan
-              gesture, so only a couple of values stay reachable. */}
+          {/* Dismiss on taps outside the sheet; sibling behind so it never eats
+              the strip's touches. */}
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setPickerOpen(false)} />
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>Время напоминания</Text>
-            <DateTimePicker
-              value={seed}
-              mode="time"
-              display="spinner"
-              onChange={(_, d) => {
-                // Ref only — no setState, so `value` stays stable and the wheel
-                // is not reset mid-scroll.
-                if (d) draftRef.current = d;
-              }}
-              textColor={palette.ink}
-              style={styles.picker}
-            />
+            <Text style={styles.preview}>{`${pad2(hour)}:${pad2(minute)}`}</Text>
+
+            <Text style={styles.stripLabel}>Часы</Text>
+            <NumberStrip values={HOURS} selected={hour} onSelect={setHour} styles={styles} />
+
+            <Text style={styles.stripLabel}>Минуты</Text>
+            <NumberStrip values={MINUTES} selected={minute} onSelect={setMinute} styles={styles} />
+
             <View style={styles.actions}>
               <Pressable onPress={() => setPickerOpen(false)} style={styles.action}>
                 <Text style={styles.actionMuted}>Отмена</Text>
@@ -168,11 +203,7 @@ const makeStyles = (p: Palette) =>
     label: { color: p.ink, fontSize: Typography.body.fontSize, flexShrink: 1 },
     time: { color: p.ink, fontSize: Typography.body.fontSize, fontVariant: ['tabular-nums'] },
     hint: { color: p.dim2, fontSize: Typography.footnote.fontSize },
-    backdrop: {
-      flex: 1,
-      backgroundColor: p.scrim,
-      justifyContent: 'flex-end',
-    },
+    backdrop: { flex: 1, backgroundColor: p.scrim, justifyContent: 'flex-end' },
     sheet: {
       backgroundColor: p.sheetBg,
       borderTopLeftRadius: Radius.card,
@@ -180,7 +211,7 @@ const makeStyles = (p: Palette) =>
       paddingHorizontal: Spacing.lg,
       paddingTop: Spacing.lg,
       paddingBottom: Spacing.xl,
-      gap: Spacing.md,
+      gap: Spacing.sm,
     },
     sheetTitle: {
       color: p.ink,
@@ -188,13 +219,38 @@ const makeStyles = (p: Palette) =>
       fontWeight: '600',
       textAlign: 'center',
     },
-    picker: { alignSelf: 'center' },
+    preview: {
+      color: p.ink,
+      fontSize: 34,
+      fontWeight: '700',
+      textAlign: 'center',
+      fontVariant: ['tabular-nums'],
+      marginBottom: Spacing.xs,
+    },
+    stripLabel: { color: p.dim2, fontSize: Typography.caption.fontSize },
+    stripContent: { gap: Spacing.xs, paddingVertical: Spacing.xs },
+    chip: {
+      width: CHIP_W - Spacing.xs,
+      paddingVertical: Spacing.sm,
+      borderRadius: Radius.card,
+      backgroundColor: p.glassBg,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    chipOn: { backgroundColor: p.accent },
+    chipText: {
+      color: p.ink,
+      fontSize: Typography.body.fontSize,
+      fontVariant: ['tabular-nums'],
+    },
+    chipTextOn: { color: p.canvasBase, fontWeight: '700' },
     actions: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
+      marginTop: Spacing.sm,
     },
     action: { paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md },
     actionMuted: { color: p.dim2, fontSize: Typography.body.fontSize },
-    actionPrimary: { color: p.pos, fontSize: Typography.body.fontSize, fontWeight: '600' },
+    actionPrimary: { color: p.accent, fontSize: Typography.body.fontSize, fontWeight: '600' },
   });

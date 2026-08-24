@@ -1,9 +1,18 @@
-import { useMemo } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenHeader } from '@components/ScreenHeader';
 import { DataController } from '@controllers/data.controller';
+import { ExportController } from '@controllers/export.controller';
 import { usePalette } from '@hooks/usePalette';
 import type { Palette } from '@theme';
 import { Radius, Spacing, TAB_BAR_HEIGHT, Typography } from '@theme';
@@ -12,6 +21,7 @@ export function DataScreen() {
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const insets = useSafeAreaInsets();
+  const [isExporting, setIsExporting] = useState(false);
 
   const onDeleteAll = () => {
     Alert.alert('Удалить все данные?', 'Счета, категории и записи будут стёрты. Отменить нельзя.', [
@@ -24,9 +34,23 @@ export function DataScreen() {
     ]);
   };
 
-  // Build 0 keeps CSV export as a stub button only (docs/BUILD0_PLAN.md#что-не-делать).
-  const onExportCsv = () => {
-    Alert.alert('Экспорт в CSV', 'Появится в версии 1.0.', [{ text: 'Понятно' }]);
+  const onExportCsv = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const status = await ExportController.exportTransactionsCsv();
+      if (status === 'empty') {
+        Alert.alert('Нечего экспортировать', 'Пока нет ни одной записи.', [{ text: 'Понятно' }]);
+      } else if (status === 'unavailable') {
+        Alert.alert('Экспорт недоступен', 'Поделиться файлом на этом устройстве нельзя.', [
+          { text: 'Понятно' },
+        ]);
+      }
+    } catch {
+      Alert.alert('Не удалось экспортировать', 'Попробуйте ещё раз.', [{ text: 'Понятно' }]);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
@@ -40,9 +64,13 @@ export function DataScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.card}>
-          <Pressable onPress={onExportCsv} style={styles.row}>
+          <Pressable onPress={onExportCsv} disabled={isExporting} style={styles.row}>
             <Text style={styles.label}>Экспорт в CSV</Text>
-            <Text style={styles.valueMuted}>v1.0</Text>
+            {isExporting ? (
+              <ActivityIndicator color={palette.dim2} />
+            ) : (
+              <Text style={styles.valueMuted}>Поделиться</Text>
+            )}
           </Pressable>
         </View>
         <View style={styles.card}>

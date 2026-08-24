@@ -257,6 +257,23 @@ export function formatMoney(
   return `${sign}${grouped}${fraction}${code}`;
 }
 
+/**
+ * Renders minor units as a plain, ungrouped decimal string with a dot separator
+ * and a leading '-' for negatives, e.g. 123456 USD → "1234.56", -50 JPY → "-50",
+ * 0 USD → "0.00". Unlike {@link formatMoney} there is no grouping, no currency
+ * code and no thin spaces — the shape a spreadsheet parses as a number. Used by
+ * the CSV export (still the only money formatter, rule 7).
+ */
+export function formatMoneyPlain(minor: number, currency: string): string {
+  const units = getMinorUnits(currency);
+  const divisor = 10n ** BigInt(units);
+  const negative = minor < 0;
+  const absMinor = BigInt(negative ? -minor : minor);
+  const intPart = absMinor / divisor;
+  const fraction = units > 0 ? '.' + (absMinor % divisor).toString().padStart(units, '0') : '';
+  return `${negative ? '-' : ''}${intPart.toString()}${fraction}`;
+}
+
 /** Inserts a thin space every three digits from the right. */
 function groupThousands(digits: string): string {
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');

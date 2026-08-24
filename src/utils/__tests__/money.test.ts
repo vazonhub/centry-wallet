@@ -5,6 +5,7 @@ import {
   convertToBase,
   formatMoney,
   formatMoneyCompact,
+  formatMoneyPlain,
   getMinorUnits,
   localDay,
   minorToAmountInput,
@@ -234,5 +235,18 @@ describe('formatMoneyCompact — abbreviated large values', () => {
   it('truncates the fraction toward zero (never over-promises)', () => {
     // 19 999.00 → 19,9k (not rounded up to 20k).
     expect(formatMoneyCompact(19_999_00, 'BYN')).toBe('19,9k BYN');
+  });
+});
+
+describe('formatMoneyPlain — CSV dot-decimal', () => {
+  it('renders signed, ungrouped, dot-decimal values', () => {
+    expect(formatMoneyPlain(123456, 'USD')).toBe('1234.56');
+    expect(formatMoneyPlain(-4088, 'BYN')).toBe('-40.88');
+    expect(formatMoneyPlain(0, 'USD')).toBe('0.00');
+  });
+
+  it('honours the currency minor-unit precision', () => {
+    expect(formatMoneyPlain(-50, 'JPY')).toBe('-50'); // 0 minor digits
+    expect(formatMoneyPlain(1234, 'BHD')).toBe('1.234'); // 3 minor digits
   });
 });

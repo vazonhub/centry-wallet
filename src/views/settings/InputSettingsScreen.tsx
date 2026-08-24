@@ -103,9 +103,12 @@ export function InputSettingsScreen() {
         animationType="fade"
         onRequestClose={() => setPickerOpen(false)}
       >
-        <Pressable style={styles.backdrop} onPress={() => setPickerOpen(false)}>
-          {/* Stop taps on the sheet from dismissing it. */}
-          <Pressable style={styles.sheet} onPress={() => {}}>
+        <View style={styles.backdrop}>
+          {/* Dismiss on taps OUTSIDE the sheet. Kept as a sibling behind the
+              sheet — wrapping the picker in a Pressable steals the wheel's pan
+              gesture, so only a couple of values stay reachable. */}
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setPickerOpen(false)} />
+          <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>Время напоминания</Text>
             <DateTimePicker
               value={draft}
@@ -125,8 +128,8 @@ export function InputSettingsScreen() {
                 <Text style={styles.actionPrimary}>Готово</Text>
               </Pressable>
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </View>
   );

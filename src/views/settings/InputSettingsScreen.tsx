@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -30,21 +30,27 @@ export function InputSettingsScreen() {
   const insets = useSafeAreaInsets();
   const s = useSettingsStore();
 
-  // The time picker lives in a modal with its own draft value, committed on
-  // "Готово". Editing inline (display="compact") is unreliable on the New
-  // Architecture — it renders the wrong time and fights every keystroke because
-  // the store value flows back into the open native popover. A committed draft
-  // sidesteps both; the row shows the stored 'HH:MM' string as the source of truth.
+  // The time picker lives in a modal, committed on "Готово". Two things matter:
+  //   1. the row shows the stored 'HH:MM' string (source of truth), so the
+  //      displayed time is always correct regardless of picker rendering;
+  //   2. the spinner is UNCONTROLLED while scrolling — its `value` is seeded once
+  //      per open and never fed back on change. Re-passing `value` on every
+  //      onChange tick (a controlled picker) resets the native wheel on the New
+  //      Architecture, so it snaps back and only a few values stay reachable.
+  //      onChange writes a ref (no re-render); commit reads the ref.
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [draft, setDraft] = useState<Date>(() => timeToDate(s.eveningPushTime));
+  const [seed, setSeed] = useState<Date>(() => timeToDate(s.eveningPushTime));
+  const draftRef = useRef<Date>(seed);
 
   const openPicker = () => {
-    setDraft(timeToDate(s.eveningPushTime));
+    const d = timeToDate(s.eveningPushTime);
+    setSeed(d);
+    draftRef.current = d;
     setPickerOpen(true);
   };
 
   const commitPicker = () => {
-    s.setEveningPushTime(dateToTime(draft));
+    s.setEveningPushTime(dateToTime(draftRef.current));
     void syncEveningReminder();
     setPickerOpen(false);
   };
@@ -111,11 +117,13 @@ export function InputSettingsScreen() {
           <View style={styles.sheet}>
             <Text style={styles.sheetTitle}>Время напоминания</Text>
             <DateTimePicker
-              value={draft}
+              value={seed}
               mode="time"
               display="spinner"
               onChange={(_, d) => {
-                if (d) setDraft(d);
+                // Ref only — no setState, so `value` stays stable and the wheel
+                // is not reset mid-scroll.
+                if (d) draftRef.current = d;
               }}
               textColor={palette.ink}
               style={styles.picker}

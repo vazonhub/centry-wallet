@@ -1,0 +1,85 @@
+import type { Translations } from './ru';
+
+/** English strings. Typed as the RU shape so a missing key is a compile error. */
+export const en: Translations = {
+  common: {
+    cancel: 'Cancel',
+    delete: 'Delete',
+    save: 'Save',
+    done: 'Done',
+    add: 'Add',
+    ok: 'OK',
+    back: 'Back',
+  },
+  tabs: {
+    history: 'History',
+    home: 'Home',
+    settings: 'Settings',
+  },
+  settings: {
+    title: 'Settings',
+    theme: 'THEME',
+    themeSystem: 'System',
+    themeLight: 'Light',
+    themeDark: 'Dark',
+    language: 'LANGUAGE',
+    languageRu: 'Русский',
+    languageEn: 'English',
+    navAccounts: 'Accounts',
+    navMoney: 'Money',
+    navCategories: 'Categories',
+    navInput: 'Input',
+    navData: 'Data',
+    navAbout: 'About',
+  },
+  money: {
+    title: 'Money',
+    baseCurrency: 'BASE CURRENCY',
+    budgetPlan: 'BUDGET PLAN',
+    hint: '“Today’s allowance” = plan ÷ days in the period (calendar week or month). It’s a standalone budget — income and expenses don’t change it.',
+  },
+  data: {
+    title: 'Data',
+    exportSection: 'EXPORT',
+    exportCsv: 'Export to CSV',
+    share: 'Share',
+    exportHint:
+      'Exports every record to a CSV file (opens in Excel or Google Sheets) and shows the share menu. Import is coming later.',
+    dataSection: 'DATA',
+    refreshWidget: 'Refresh widget',
+    refresh: 'Refresh',
+    refreshed: 'Updated ✓',
+    refreshHint:
+      'The widget refreshes itself after each entry. Tap if iOS hasn’t repainted it yet.',
+    deleteAll: 'Delete all data',
+    deleteAllTitle: 'Delete all data?',
+    deleteAllBody: 'Accounts, categories and records will be erased. This can’t be undone.',
+    deleteAllConfirm: 'Delete all',
+    exportEmptyTitle: 'Nothing to export',
+    exportEmptyBody: 'There are no records yet.',
+    exportUnavailableTitle: 'Export unavailable',
+    exportUnavailableBody: 'Sharing a file isn’t available on this device.',
+    exportFailedTitle: 'Export failed',
+    exportFailedBody: 'Please try again.',
+  },
+  about: {
+    title: 'About',
+    links: 'LINKS',
+    appInfo: 'ABOUT',
+    version: 'Version',
+    footnote:
+      'Centry is an offline tracker. Your data never leaves the phone. The only network request is anonymous currency rates (only currency codes go out).',
+  },
+  inputSettings: {
+    title: 'Input',
+    siriSection: 'SIRI & SHORTCUTS',
+    siriToggle: 'Add by voice',
+    siriHint:
+      '“Hey Siri, add expense to Centry” — opens the input pre-filled from the phrase. Works on device (iOS 18+). When off, Siri opens an empty input.',
+    reminderSection: 'REMINDER',
+    reminderToggle: 'Evening reminder',
+    reminderTimeLabel: 'Time',
+    reminderHint: 'A local reminder to log the day’s spending. Nothing is sent to the network.',
+    reminderTitle: 'Reminder time',
+  },
+};

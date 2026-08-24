@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
 
 import { GlassButton } from '@components/GlassButton';
 import { usePalette } from '@hooks/usePalette';
@@ -23,6 +24,7 @@ interface Props {
 export function ScreenHeader({ title, right }: Props) {
   const palette = usePalette();
   const router = useRouter();
+  const { t } = useTranslation();
   const styles = makeStyles(palette);
 
   return (
@@ -31,7 +33,7 @@ export function ScreenHeader({ title, right }: Props) {
         <GlassButton
           round
           onPress={() => router.back()}
-          accessibilityLabel="Назад"
+          accessibilityLabel={t('common.back')}
           contentStyle={styles.backContent}
         >
           <Ionicons name="chevron-back" size={22} color={palette.ink} />

@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 import { BudgetPlanEditor } from '@components/BudgetPlanEditor';
 import { ScreenHeader } from '@components/ScreenHeader';
@@ -16,6 +17,7 @@ export function MoneyScreen() {
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const baseCurrency = useSettingsStore((s) => s.baseCurrency);
   const budgetPlan = useSettingsStore((s) => s.budgetPlan);
   const setBudgetPlan = useSettingsStore((s) => s.setBudgetPlan);
@@ -29,7 +31,7 @@ export function MoneyScreen() {
 
   return (
     <View style={styles.canvas}>
-      <ScreenHeader title="Деньги" />
+      <ScreenHeader title={t('money.title')} />
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
@@ -37,7 +39,7 @@ export function MoneyScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.sectionTitle}>БАЗОВАЯ ВАЛЮТА</Text>
+        <Text style={styles.sectionTitle}>{t('money.baseCurrency')}</Text>
         <View style={styles.chips}>
           {COMMON_CURRENCIES.map((c) => {
             const active = c.code === baseCurrency;
@@ -53,12 +55,9 @@ export function MoneyScreen() {
           })}
         </View>
 
-        <Text style={styles.sectionTitle}>ПЛАН БЮДЖЕТА</Text>
+        <Text style={styles.sectionTitle}>{t('money.budgetPlan')}</Text>
         <BudgetPlanEditor value={budgetPlan} onChange={setBudgetPlan} baseCurrency={baseCurrency} />
-        <Text style={styles.hint}>
-          «Можно сегодня» = план ÷ дни периода (календарная неделя или месяц). Это отдельный бюджет
-          — приходы и расходы его не меняют.
-        </Text>
+        <Text style={styles.hint}>{t('money.hint')}</Text>
       </ScrollView>
     </View>
   );

@@ -9,6 +9,7 @@ export const SETTINGS_KEYS = {
   baseCurrency: 'base_currency',
   paydayDay: 'payday_day',
   theme: 'theme',
+  language: 'language',
   inputSiri: 'input_siri',
   inputEveningPush: 'input_evening_push',
   eveningPushTime: 'evening_push_time',

@@ -244,7 +244,8 @@ export function InputSheet() {
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.chipsRow}
+      style={styles.chipsScroll}
+      contentContainerStyle={styles.chipsScrollContent}
     >
       {accounts.map((a) => {
         const active = a.id === selectedId;
@@ -407,7 +408,8 @@ export function InputSheet() {
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.chipsRow}
+                  style={styles.chipsScroll}
+                  contentContainerStyle={styles.chipsScrollContent}
                 >
                   {kindCategories.map((c) => {
                     const active = c.id === categoryId;
@@ -534,6 +536,17 @@ const makeStyles = (p: Palette) =>
     currency: { ...numberTextStyle, color: p.dim, fontSize: Typography.title.fontSize },
     rateHint: { ...numberTextStyle, color: p.dim, fontSize: Typography.footnote.fontSize },
     chipsRow: { gap: Spacing.sm, paddingVertical: Spacing.xs, flexDirection: 'row' },
+    // Full-bleed horizontal chip lists: the ScrollView breaks out of the sheet's
+    // screen padding so the list scrolls edge-to-edge, while the content keeps
+    // the same inset (first/last chip aligned to the padding) — matching the
+    // Home account chips and History filters.
+    chipsScroll: { marginHorizontal: -Spacing.screenPadding },
+    chipsScrollContent: {
+      flexDirection: 'row',
+      gap: Spacing.sm,
+      paddingVertical: Spacing.xs,
+      paddingHorizontal: Spacing.screenPadding,
+    },
     chip: {
       paddingHorizontal: Spacing.lg,
       paddingVertical: Spacing.sm,

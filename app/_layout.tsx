@@ -11,7 +11,6 @@ import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-c
 
 import { useAppBootstrap } from '@hooks/useAppBootstrap';
 import { useNotificationResponse } from '@hooks/useNotificationResponse';
-import { usePendingIntent } from '@hooks/usePendingIntent';
 import { useIsDark, usePalette } from '@hooks/usePalette';
 import { useWidgetDeepLink } from '@hooks/useWidgetDeepLink';
 import { AccountSheet } from '@components/AccountSheet';
@@ -42,7 +41,6 @@ export default function RootLayout() {
   const { ready } = useAppBootstrap();
   useWidgetDeepLink();
   useNotificationResponse();
-  usePendingIntent();
   const isDark = useIsDark();
   const palette = usePalette();
 

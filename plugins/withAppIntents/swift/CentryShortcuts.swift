@@ -4,8 +4,9 @@ import AppIntents
 // app target (not an extension) for the phrases to auto-register — this is why
 // these sources are injected into the main target by plugins/withAppIntents,
 // not vended from targets/widget. `\(.applicationName)` resolves to "Centry".
+// iOS 17 floor: the intents open a deep link via OpenURLIntent (iOS 17+).
 
-@available(iOS 16.0, *)
+@available(iOS 17.0, *)
 struct CentryShortcuts: AppShortcutsProvider {
   static var appShortcuts: [AppShortcut] {
     AppShortcut(

@@ -169,10 +169,10 @@ export function TransactionDetailSheet() {
   return (
     <BottomSheetModal
       ref={sheetRef}
-      snapPoints={['60%']}
+      snapPoints={['60%', '92%']}
       enableDynamicSizing={false}
       enablePanDownToClose
-      keyboardBehavior="interactive"
+      keyboardBehavior="extend"
       keyboardBlurBehavior="restore"
       backdropComponent={renderBackdrop}
       backgroundStyle={styles.sheetBg}
@@ -209,11 +209,9 @@ export function TransactionDetailSheet() {
                     value={amountText}
                     onChangeText={(t) => setAmountText(sanitizeAmountInput(t, tx.currency))}
                     keyboardType="decimal-pad"
-                    returnKeyType="done"
                     placeholder={amountPlaceholder(tx.currency)}
                     placeholderTextColor={palette.dim2}
                     onEndEditing={() => void commitAmount()}
-                    onSubmitEditing={() => void commitAmount()}
                   />
                   <Text style={styles.amountCurrency}>{tx.currency}</Text>
                 </View>

@@ -171,6 +171,20 @@ export async function softDeleteTransaction(id: Id, deletedAt: number): Promise<
   ]);
 }
 
+/**
+ * Soft-deletes BOTH legs of a transfer (all rows sharing `transferPairId`). A
+ * transfer is stored as two linked rows but shown as one; deleting only the
+ * visible leg would leave the hidden leg skewing the other account's balance.
+ */
+export async function softDeleteTransferPair(pairId: Id, deletedAt: number): Promise<void> {
+  const db = getDb();
+  await db.runAsync(
+    `UPDATE transactions SET deleted_at = ?, updated_at = ?
+     WHERE transfer_pair_id = ? AND deleted_at IS NULL;`,
+    [deletedAt, deletedAt, pairId],
+  );
+}
+
 // --- Aggregates (docs/DATA_MODEL.md#ключевые-запросы) ----------------------
 // NOTE: SQL `* rate / 1e6` truncates toward zero. Fine for on-screen aggregates;
 // the canonical half-up rounding lives in @utils/money and is applied per

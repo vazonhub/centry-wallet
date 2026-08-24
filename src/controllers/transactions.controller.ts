@@ -199,7 +199,15 @@ async function editTransactionDate(id: Id, occurredAtSec: number): Promise<void>
 }
 
 async function deleteTransaction(id: Id): Promise<void> {
-  await TransactionsRepo.softDeleteTransaction(id, nowSec());
+  const tx = await TransactionsRepo.getTransaction(id);
+  const now = nowSec();
+  // A transfer is two linked rows shown as one — delete both legs so the other
+  // account's balance doesn't keep a dangling half.
+  if (tx?.transferPairId) {
+    await TransactionsRepo.softDeleteTransferPair(tx.transferPairId, now);
+  } else {
+    await TransactionsRepo.softDeleteTransaction(id, now);
+  }
   await DataController.loadAll();
 }
 

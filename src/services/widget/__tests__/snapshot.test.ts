@@ -64,6 +64,11 @@ describe('buildWidgetSnapshot', () => {
       plan: { period: 'month', amountMinor: 310_00, currency: 'BYN' },
       todayLocalDay: '2026-08-20',
       now,
+      periodLabel: 'месяц',
+      transferLabel: 'Перевод',
+      noCategoryLabel: 'Без категории',
+      resolveAccountName: (a) => a.name,
+      resolveCategoryName: (c) => c.name,
     });
 
     expect(snap.currency).toBe('BYN');
@@ -96,6 +101,11 @@ describe('buildWidgetSnapshot', () => {
       plan: { period: 'month', amountMinor: 310_00, currency: 'BYN' },
       todayLocalDay: '2026-08-20',
       now,
+      periodLabel: 'месяц',
+      transferLabel: 'Перевод',
+      noCategoryLabel: 'Без категории',
+      resolveAccountName: (a) => a.name,
+      resolveCategoryName: (c) => c.name,
     });
 
     expect(snap.recent).toHaveLength(WIDGET_RECENT_LIMIT);

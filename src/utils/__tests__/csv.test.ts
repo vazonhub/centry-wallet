@@ -1,7 +1,27 @@
-import type { Account, Category, Transaction } from '@models';
-import { buildTransactionsCsv, CSV_COLUMNS, serializeCsv } from '@utils/csv';
+import type { Account, Category, Transaction, TransactionKind } from '@models';
+import { buildTransactionsCsv, serializeCsv } from '@utils/csv';
 
 const e6 = (rate: number) => Math.round(rate * 1_000_000);
+
+// Localized labels the caller injects (the controller does this from i18n).
+const COLUMNS = [
+  'Дата',
+  'Время',
+  'Тип',
+  'Счёт',
+  'Категория',
+  'Сумма',
+  'Валюта',
+  'Сумма в базе',
+  'Базовая валюта',
+  'Курс',
+  'Заметка',
+];
+const KIND_LABELS: Record<TransactionKind, string> = {
+  expense: 'Расход',
+  income: 'Доход',
+  transfer: 'Перевод',
+};
 
 describe('serializeCsv — RFC 4180 escaping', () => {
   it('joins plain fields with commas and rows with CRLF', () => {
@@ -84,13 +104,17 @@ const build = (
     categories: [category({})],
     baseCurrency: 'BYN',
     tzOffsetMin: 0,
+    columns: COLUMNS,
+    kindLabels: KIND_LABELS,
+    resolveAccountName: (a) => a.name,
+    resolveCategoryName: (c) => c.name,
     ...over,
   });
 
 describe('buildTransactionsCsv', () => {
   it('starts with the header row', () => {
     const lines = build([tx({})]).split('\r\n');
-    expect(lines[0]).toBe(CSV_COLUMNS.join(','));
+    expect(lines[0]).toBe(COLUMNS.join(','));
   });
 
   it('renders an expense row with signed amount, base amount and rate', () => {

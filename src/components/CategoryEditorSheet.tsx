@@ -1,4 +1,5 @@
 import { useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   BottomSheetBackdrop,
@@ -37,6 +38,7 @@ function isExisting(t: CategoryEditorTarget): t is Category {
  * System categories can be edited but not deleted (rule 10 soft-delete only).
  */
 export function CategoryEditorSheet() {
+  const { t } = useTranslation();
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const sheetRef = useRef<BottomSheetModal>(null);
@@ -82,10 +84,10 @@ export function CategoryEditorSheet() {
 
   const onDelete = useCallback(() => {
     if (!editing) return;
-    Alert.alert('Удалить категорию?', 'Записи в ней останутся без категории.', [
-      { text: 'Отмена', style: 'cancel' },
+    Alert.alert(t('categoryEditor.deleteTitle'), t('categoryEditor.deleteMessage'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Удалить',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
           await CategoriesController.deleteCategory(editing.id);
@@ -93,7 +95,7 @@ export function CategoryEditorSheet() {
         },
       },
     ]);
-  }, [editing, sheetRef]);
+  }, [editing, sheetRef, t]);
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
@@ -118,7 +120,11 @@ export function CategoryEditorSheet() {
             <AppIcon name={icon} color={color} size={24} />
           </View>
           <Text style={styles.heading}>
-            {editing ? 'Категория' : kind === 'income' ? 'Новая — доход' : 'Новая — расход'}
+            {editing
+              ? t('categoryEditor.heading')
+              : kind === 'income'
+                ? t('categoryEditor.newIncome')
+                : t('categoryEditor.newExpense')}
           </Text>
         </View>
 
@@ -126,11 +132,11 @@ export function CategoryEditorSheet() {
           style={styles.input}
           value={name}
           onChangeText={setName}
-          placeholder="Название"
+          placeholder={t('categoryEditor.namePlaceholder')}
           placeholderTextColor={palette.dim2}
         />
 
-        <Text style={styles.label}>ЦВЕТ</Text>
+        <Text style={styles.label}>{t('categoryEditor.colorLabel')}</Text>
         <View style={styles.colorRow}>
           {CATEGORY_COLOR_CHOICES.map((c) => (
             <Pressable
@@ -148,7 +154,7 @@ export function CategoryEditorSheet() {
           ))}
         </View>
 
-        <Text style={styles.label}>ИКОНКА</Text>
+        <Text style={styles.label}>{t('categoryEditor.iconLabel')}</Text>
         <View style={styles.iconGrid}>
           {CATEGORY_ICON_CHOICES.map((ic) => {
             const active = ic === icon;
@@ -171,11 +177,13 @@ export function CategoryEditorSheet() {
         </View>
 
         <Pressable onPress={onSave} style={styles.save}>
-          <Text style={styles.saveText}>{editing ? 'Сохранить' : 'Создать'}</Text>
+          <Text style={styles.saveText}>
+            {editing ? t('common.save') : t('categoryEditor.create')}
+          </Text>
         </Pressable>
         {editing && !editing.isSystem && (
           <Pressable onPress={onDelete} style={styles.delete}>
-            <Text style={styles.deleteText}>Удалить категорию</Text>
+            <Text style={styles.deleteText}>{t('categoryEditor.deleteButton')}</Text>
           </Pressable>
         )}
       </BottomSheetScrollView>

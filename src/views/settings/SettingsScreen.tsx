@@ -18,7 +18,14 @@ const THEME_VALUES: ThemeChoice[] = ['system', 'light', 'dark'];
 const LANGUAGE_VALUES: LanguageChoice[] = ['ru', 'en'];
 
 type IconName = keyof typeof Ionicons.glyphMap;
-const NAV: { route: string; labelKey: string; icon: IconName }[] = [
+type NavKey =
+  | 'settings.navAccounts'
+  | 'settings.navMoney'
+  | 'settings.navCategories'
+  | 'settings.navInput'
+  | 'settings.navData'
+  | 'settings.navAbout';
+const NAV: { route: string; labelKey: NavKey; icon: IconName }[] = [
   {
     route: '/(tabs)/(settings)/accounts',
     labelKey: 'settings.navAccounts',

@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text } from 'react-native';
 import {
   BottomSheetBackdrop,
@@ -20,6 +21,7 @@ import { Spacing, Typography } from '@theme';
  * Settings, so the back button dropped them in Settings instead of Home.
  */
 export function BudgetSheet() {
+  const { t } = useTranslation();
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const budgetPlan = useSettingsStore((s) => s.budgetPlan);
@@ -43,17 +45,14 @@ export function BudgetSheet() {
       handleIndicatorStyle={styles.handle}
     >
       <BottomSheetScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.heading}>План бюджета</Text>
+        <Text style={styles.heading}>{t('budgetSheet.heading')}</Text>
         <BudgetPlanEditor
           value={budgetPlan}
           onChange={setBudgetPlan}
           baseCurrency={baseCurrency}
           insideSheet
         />
-        <Text style={styles.hint}>
-          «Можно сегодня» = план ÷ дни периода (календарная неделя или месяц). Это отдельный бюджет
-          — приходы и расходы его не меняют.
-        </Text>
+        <Text style={styles.hint}>{t('budgetSheet.hint')}</Text>
       </BottomSheetScrollView>
     </BottomSheetModal>
   );

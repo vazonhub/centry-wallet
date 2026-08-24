@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
 import {
@@ -23,6 +24,7 @@ import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
 import { numberTextStyle, Radius, Spacing, Typography } from '@theme';
 import { hexToRgba } from '@utils/color';
+import { displayAccountName, displayCategoryName } from '@utils/displayName';
 import { hapticLight, hapticSuccess } from '@utils/haptics';
 import {
   amountPlaceholder,
@@ -34,10 +36,10 @@ import {
 } from '@utils/money';
 
 const E6_ONE = 1_000_000;
-const ACCOUNT_KINDS: { kind: Account['kind']; label: string; icon: IoniconName }[] = [
-  { kind: 'cash', label: 'Наличные', icon: ACCOUNT_KIND_ICONS.cash },
-  { kind: 'card', label: 'Карта', icon: ACCOUNT_KIND_ICONS.card },
-  { kind: 'wallet', label: 'Кошелёк', icon: ACCOUNT_KIND_ICONS.wallet },
+const ACCOUNT_KINDS: { kind: Account['kind']; icon: IoniconName }[] = [
+  { kind: 'cash', icon: ACCOUNT_KIND_ICONS.cash },
+  { kind: 'card', icon: ACCOUNT_KIND_ICONS.card },
+  { kind: 'wallet', icon: ACCOUNT_KIND_ICONS.wallet },
 ];
 
 type CreateTarget = 'main' | 'from' | 'to';
@@ -49,6 +51,7 @@ type CreateTarget = 'main' | 'from' | 'to';
  * account creation (D7).
  */
 export function InputSheet() {
+  const { t } = useTranslation();
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
 
@@ -261,13 +264,13 @@ export function InputSheet() {
               fallback="wallet-outline"
             />
             <Text style={[styles.chipText, active && styles.chipTextActive]}>
-              {a.name} · {a.currency}
+              {displayAccountName(a)} · {a.currency}
             </Text>
           </Pressable>
         );
       })}
       <Pressable onPress={() => beginCreate(target)} style={styles.chip}>
-        <Text style={styles.chipText}>＋ Счёт</Text>
+        <Text style={styles.chipText}>{t('input.addAccount')}</Text>
       </Pressable>
     </ScrollView>
   );
@@ -292,17 +295,17 @@ export function InputSheet() {
       <BottomSheetScrollView contentContainerStyle={styles.container}>
         {createTarget !== null ? (
           <>
-            <Text style={styles.heading}>Новый счёт</Text>
+            <Text style={styles.heading}>{t('input.newAccount')}</Text>
             <BottomSheetTextInput
               style={styles.note}
               value={newName}
               onChangeText={setNewName}
-              placeholder="Название (напр. Наличные USD)"
+              placeholder={t('input.namePlaceholder')}
               placeholderTextColor={palette.dim2}
             />
-            <Text style={styles.label}>ВАЛЮТА</Text>
+            <Text style={styles.label}>{t('input.currency')}</Text>
             <CurrencyDropdown value={newCurrency} onChange={setNewCurrency} />
-            <Text style={styles.label}>ТИП</Text>
+            <Text style={styles.label}>{t('input.type')}</Text>
             <View style={styles.chipsRow}>
               {ACCOUNT_KINDS.map((k) => {
                 const active = k.kind === newKind;
@@ -321,7 +324,7 @@ export function InputSheet() {
                       size={15}
                     />
                     <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                      {k.label}
+                      {t(`input.kind_${k.kind}`)}
                     </Text>
                   </Pressable>
                 );
@@ -332,17 +335,17 @@ export function InputSheet() {
                 onPress={() => setCreateTarget(null)}
                 style={[styles.save, styles.secondary]}
               >
-                <Text style={styles.secondaryText}>Отмена</Text>
+                <Text style={styles.secondaryText}>{t('common.cancel')}</Text>
               </Pressable>
               <Pressable onPress={onCreateAccount} style={styles.save}>
-                <Text style={styles.saveText}>Создать</Text>
+                <Text style={styles.saveText}>{t('input.create')}</Text>
               </Pressable>
             </View>
           </>
         ) : (
           <>
             <SegmentedControl
-              values={['Расход', 'Доход', 'Перевод']}
+              values={[t('input.expense'), t('input.income'), t('input.transfer')]}
               selectedIndex={kind === 'expense' ? 0 : kind === 'income' ? 1 : 2}
               onChange={(e) => {
                 const i = e.nativeEvent.selectedSegmentIndex;
@@ -369,13 +372,15 @@ export function InputSheet() {
 
             {kind === 'transfer' ? (
               <>
-                <Text style={styles.label}>СО СЧЁТА</Text>
+                <Text style={styles.label}>{t('input.fromAccount')}</Text>
                 {renderAccountChips(fromAccountId, setFromAccountId, 'from')}
-                <Text style={styles.label}>НА СЧЁТ</Text>
+                <Text style={styles.label}>{t('input.toAccount')}</Text>
                 {renderAccountChips(toAccountId, setToAccountId, 'to')}
                 {transfer && !transfer.sameCurrency && toAccount && (
                   <>
-                    <Text style={styles.label}>ИТОГ ({toAccount.currency})</Text>
+                    <Text style={styles.label}>
+                      {t('input.total', { currency: toAccount.currency })}
+                    </Text>
                     <View style={styles.amountRow}>
                       <BottomSheetTextInput
                         style={styles.amountSmall}
@@ -433,7 +438,7 @@ export function InputSheet() {
                           style={[styles.catText, active && styles.catTextActive]}
                           numberOfLines={1}
                         >
-                          {c.name}
+                          {displayCategoryName(c)}
                         </Text>
                       </Pressable>
                     );
@@ -448,7 +453,7 @@ export function InputSheet() {
                       <AppIcon name="add" color={palette.dim} size={20} />
                     </View>
                     <Text style={styles.catText} numberOfLines={1}>
-                      Добавить
+                      {t('common.add')}
                     </Text>
                   </Pressable>
                 </ScrollView>
@@ -459,12 +464,12 @@ export function InputSheet() {
               style={styles.note}
               value={note}
               onChangeText={setNote}
-              placeholder="Заметка (необязательно)"
+              placeholder={t('input.notePlaceholder')}
               placeholderTextColor={palette.dim2}
             />
 
             <View style={styles.dateRow}>
-              <Text style={styles.label}>ДАТА</Text>
+              <Text style={styles.label}>{t('input.date')}</Text>
               <DateTimePicker
                 value={occurredAt}
                 mode="date"
@@ -479,7 +484,7 @@ export function InputSheet() {
               onPress={onSave}
               style={[styles.save, !canSave && styles.saveDisabled]}
             >
-              <Text style={styles.saveText}>Сохранить</Text>
+              <Text style={styles.saveText}>{t('common.save')}</Text>
             </Pressable>
           </>
         )}

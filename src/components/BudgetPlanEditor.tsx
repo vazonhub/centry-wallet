@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
@@ -26,7 +27,6 @@ interface Props {
 }
 
 const PERIODS: BudgetPeriod[] = ['week', 'month'];
-const PERIOD_LABELS = ['Неделя', 'Месяц'];
 
 /**
  * Budget plan editor — shared by onboarding and Settings → Деньги. The user
@@ -34,9 +34,11 @@ const PERIOD_LABELS = ['Неделя', 'Месяц'];
  * pace preview is shown in the plan's own currency (plan ÷ days-in-period).
  */
 export function BudgetPlanEditor({ value, onChange, baseCurrency, insideSheet }: Props) {
+  const { t } = useTranslation();
   const palette = usePalette();
   const isDark = useIsDark();
   const styles = useMemo(() => makeStyles(palette), [palette]);
+  const PERIOD_LABELS = [t('budgetPlan.week'), t('budgetPlan.month')];
   // BottomSheetTextInput is required inside a bottom sheet, plain TextInput on a
   // regular screen (rendering BottomSheetTextInput outside a sheet throws).
   const AmountInput = insideSheet ? BottomSheetTextInput : TextInput;
@@ -65,7 +67,7 @@ export function BudgetPlanEditor({ value, onChange, baseCurrency, insideSheet }:
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.label}>ПЕРИОД</Text>
+      <Text style={styles.label}>{t('budgetPlan.periodTitle')}</Text>
       <SegmentedControl
         values={PERIOD_LABELS}
         selectedIndex={periodIndex}
@@ -76,7 +78,7 @@ export function BudgetPlanEditor({ value, onChange, baseCurrency, insideSheet }:
         }}
       />
 
-      <Text style={styles.label}>СКОЛЬКО ГОТОВ ТРАТИТЬ</Text>
+      <Text style={styles.label}>{t('budgetPlan.amountTitle')}</Text>
       <View style={styles.amountRow}>
         <AmountInput
           style={styles.amountInput}
@@ -91,9 +93,10 @@ export function BudgetPlanEditor({ value, onChange, baseCurrency, insideSheet }:
 
       <Text style={styles.preview}>
         {value.amountMinor > 0
-          ? `≈ ${formatMoney(perDayMinor, value.currency)} в день` +
-            (value.currency !== baseCurrency ? ' · пересчёт в базовую валюту на главной' : '')
-          : 'Задайте план, чтобы видеть «можно сегодня».'}
+          ? t('budgetPlan.perDayPreview', {
+              amount: formatMoney(perDayMinor, value.currency),
+            }) + (value.currency !== baseCurrency ? t('budgetPlan.convertNote') : '')
+          : t('budgetPlan.emptyHint')}
       </Text>
     </View>
   );

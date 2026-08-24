@@ -86,4 +86,20 @@ async function resetAllData(): Promise<void> {
   await loadAll();
 }
 
-export const DataController = { loadAll, refreshRates, resetAllData, changeBaseCurrency };
+/**
+ * Force-rebuilds the widget snapshot from the current store and reloads its
+ * timelines ("Обновить виджет" in settings). The snapshot is normally refreshed
+ * after every mutation; this is the manual escape hatch for when iOS hasn't
+ * repainted the widget yet. Best-effort, never throws.
+ */
+function refreshWidget(): void {
+  refreshWidgetSnapshot();
+}
+
+export const DataController = {
+  loadAll,
+  refreshRates,
+  resetAllData,
+  changeBaseCurrency,
+  refreshWidget,
+};

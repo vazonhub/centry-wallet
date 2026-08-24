@@ -51,6 +51,15 @@ const INCOME_DEFS: readonly CategoryDef[] = [
   },
 ];
 
+/**
+ * System-category seed id → its original (Russian) seed name. Used by
+ * `@utils/displayName` to tell an untouched system category (localizable) from
+ * one the user has renamed (keeps its stored name).
+ */
+export const SEED_CATEGORY_NAMES: Record<string, string> = Object.fromEntries(
+  [...EXPENSE_DEFS, ...INCOME_DEFS].map((d) => [d.id, d.name]),
+);
+
 /** Curated colours offered in the category editor's colour picker (decorative, rule 6). */
 export const CATEGORY_COLOR_CHOICES: readonly string[] = [
   '#F08A24',

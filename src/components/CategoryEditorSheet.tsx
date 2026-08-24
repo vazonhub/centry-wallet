@@ -23,6 +23,7 @@ import type { Category, CategoryKind } from '@models';
 import type { Palette } from '@theme';
 import { Radius, Spacing, Typography } from '@theme';
 import { hexToRgba } from '@utils/color';
+import { displayCategoryName } from '@utils/displayName';
 import { hapticLight, hapticSuccess } from '@utils/haptics';
 
 const DEFAULT_COLOR = CATEGORY_COLOR_CHOICES[0] ?? '#9AA1AD';
@@ -54,7 +55,7 @@ export function CategoryEditorSheet() {
       if (isExisting(target)) {
         setEditing(target);
         setKind(target.kind);
-        setName(target.name);
+        setName(displayCategoryName(target));
         setIcon(target.icon);
         setColor(target.color);
       } else {
@@ -74,7 +75,10 @@ export function CategoryEditorSheet() {
 
   const onSave = useCallback(async () => {
     if (editing) {
-      await CategoriesController.updateCategory(editing.id, { name, icon, color });
+      // Unchanged localized name → keep the original stored name (preserve i18n
+      // of a system seed); a real edit stores the typed name.
+      const resolvedName = name.trim() === displayCategoryName(editing) ? editing.name : name;
+      await CategoriesController.updateCategory(editing.id, { name: resolvedName, icon, color });
     } else {
       await CategoriesController.createCategory({ name, icon, color, kind });
     }

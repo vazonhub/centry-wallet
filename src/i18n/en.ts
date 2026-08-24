@@ -239,6 +239,17 @@ export const en: Translations = {
     transfer: 'Transfer',
     noCategory: 'No category',
   },
+  currencies: {
+    BYN: 'Belarusian ruble',
+    USD: 'US Dollar',
+    EUR: 'Euro',
+    RUB: 'Russian ruble',
+    PLN: 'Polish zloty',
+    UAH: 'Ukrainian hryvnia',
+    GBP: 'Pound sterling',
+    GEL: 'Georgian lari',
+    KZT: 'Kazakhstani tenge',
+  },
   csv: {
     date: 'Date',
     time: 'Time',

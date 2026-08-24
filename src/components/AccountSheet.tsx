@@ -20,6 +20,7 @@ import { useDataStore } from '@stores/data.store';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
 import { numberTextStyle, Radius, Spacing, Typography } from '@theme';
+import { displayAccountName } from '@utils/displayName';
 import { hapticLight, hapticSuccess } from '@utils/haptics';
 import {
   amountPlaceholder,
@@ -53,6 +54,10 @@ export function AccountSheet() {
   const [currency, setCurrency] = useState(baseCurrency);
   const [kind, setKind] = useState<Account['kind']>('cash');
   const [opening, setOpening] = useState('');
+  // For a seeded account we pre-fill the field with the localized display name;
+  // { stored, display } lets onSubmit keep the original stored name when the
+  // user leaves it unchanged, so its localization is preserved.
+  const seedNameRef = useRef<{ stored: string; display: string } | null>(null);
 
   useImperativeHandle(
     accountSheetRef,
@@ -62,14 +67,17 @@ export function AccountSheet() {
           ? useDataStore.getState().accounts.find((a) => a.id === accountId)
           : undefined;
         if (account) {
+          const display = displayAccountName(account);
           setEditingId(account.id);
-          setName(account.name);
+          setName(display);
+          seedNameRef.current = { stored: account.name, display };
           setCurrency(account.currency);
           setKind(account.kind);
           setOpening(minorToAmountInput(account.openingMinor, account.currency));
         } else {
           setEditingId(null);
           setName('');
+          seedNameRef.current = null;
           setCurrency(useSettingsStore.getState().baseCurrency);
           setKind('cash');
           setOpening('');
@@ -83,15 +91,21 @@ export function AccountSheet() {
 
   const onSubmit = async () => {
     const openingMinor = parseAmountToMinor(opening, currency) ?? 0;
+    // Unchanged localized name → keep the original stored name (preserve i18n).
+    const typed = name.trim();
+    const resolvedName =
+      seedNameRef.current && typed === seedNameRef.current.display
+        ? seedNameRef.current.stored
+        : typed || currency;
     if (editingId) {
       await TransactionsController.updateAccount(editingId, {
-        name: name.trim() || currency,
+        name: resolvedName,
         kind,
         openingMinor,
       });
     } else {
       await TransactionsController.createAccount({
-        name: name.trim() || currency,
+        name: resolvedName,
         currency,
         kind,
         openingMinor,

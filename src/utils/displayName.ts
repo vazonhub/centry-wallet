@@ -1,3 +1,4 @@
+import { SEED_CATEGORY_NAMES } from '@constants/categories';
 import type { Account, Category } from '@models';
 import i18n from '@i18n';
 
@@ -42,10 +43,15 @@ const CATEGORY_KEY: Record<string, `categoriesSeed.${SeedLeaf}`> = {
 /** Seed names of the default account across languages (untouched → localizable). */
 const SEED_ACCOUNT_NAMES = new Set(['Основной', 'Main']);
 
-/** Display name for a category — localized for system seeds, stored name otherwise. */
+/**
+ * Display name for a category. Localizes an UNTOUCHED system seed (stored name
+ * still equals the original seed name); once the user renames it, the stored
+ * name wins so the rename is visible.
+ */
 export function displayCategoryName(category: Pick<Category, 'id' | 'name' | 'isSystem'>): string {
   const key = category.isSystem ? CATEGORY_KEY[category.id] : undefined;
-  return key ? i18n.t(key) : category.name;
+  if (key && category.name === SEED_CATEGORY_NAMES[category.id]) return i18n.t(key);
+  return category.name;
 }
 
 /** Display name for an account — localizes the untouched default account seed. */
@@ -53,4 +59,33 @@ export function displayAccountName(account: Pick<Account, 'name' | 'isDefault'>)
   return account.isDefault && SEED_ACCOUNT_NAMES.has(account.name)
     ? i18n.t('accounts.mainAccount')
     : account.name;
+}
+
+/** Localized currency display name, or the code itself if unknown. */
+type CurrencyKey =
+  | 'currencies.BYN'
+  | 'currencies.USD'
+  | 'currencies.EUR'
+  | 'currencies.RUB'
+  | 'currencies.PLN'
+  | 'currencies.UAH'
+  | 'currencies.GBP'
+  | 'currencies.GEL'
+  | 'currencies.KZT';
+
+const CURRENCY_KEY: Record<string, CurrencyKey> = {
+  BYN: 'currencies.BYN',
+  USD: 'currencies.USD',
+  EUR: 'currencies.EUR',
+  RUB: 'currencies.RUB',
+  PLN: 'currencies.PLN',
+  UAH: 'currencies.UAH',
+  GBP: 'currencies.GBP',
+  GEL: 'currencies.GEL',
+  KZT: 'currencies.KZT',
+};
+
+export function currencyName(code: string): string {
+  const key = CURRENCY_KEY[code.toUpperCase()];
+  return key ? i18n.t(key) : code;
 }

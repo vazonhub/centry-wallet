@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -10,7 +10,7 @@ import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
 import { Radius, Spacing, TAB_BAR_HEIGHT, Typography } from '@theme';
 
-/** 'HH:MM' → today's Date at that time (for the time picker). */
+/** 'HH:MM' → today's Date at that time (seeds the picker). */
 function timeToDate(time: string): Date {
   const { hour, minute } = parseHhMm(time);
   const d = new Date();
@@ -29,6 +29,25 @@ export function InputSettingsScreen() {
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const insets = useSafeAreaInsets();
   const s = useSettingsStore();
+
+  // The time picker lives in a modal with its own draft value, committed on
+  // "Готово". Editing inline (display="compact") is unreliable on the New
+  // Architecture — it renders the wrong time and fights every keystroke because
+  // the store value flows back into the open native popover. A committed draft
+  // sidesteps both; the row shows the stored 'HH:MM' string as the source of truth.
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [draft, setDraft] = useState<Date>(() => timeToDate(s.eveningPushTime));
+
+  const openPicker = () => {
+    setDraft(timeToDate(s.eveningPushTime));
+    setPickerOpen(true);
+  };
+
+  const commitPicker = () => {
+    s.setEveningPushTime(dateToTime(draft));
+    void syncEveningReminder();
+    setPickerOpen(false);
+  };
 
   const rows: { label: string; value: boolean; onChange: (v: boolean) => void }[] = [
     { label: 'Виджет', value: s.inputWidget, onChange: s.setInputWidget },
@@ -66,19 +85,10 @@ export function InputSettingsScreen() {
             </View>
           ))}
           {s.inputEveningPush && (
-            <View style={[styles.row, styles.rowTop]}>
+            <Pressable onPress={openPicker} style={[styles.row, styles.rowTop]}>
               <Text style={styles.label}>Время напоминания</Text>
-              <DateTimePicker
-                value={timeToDate(s.eveningPushTime)}
-                mode="time"
-                display="compact"
-                onChange={(_, d) => {
-                  if (!d) return;
-                  s.setEveningPushTime(dateToTime(d));
-                  void syncEveningReminder();
-                }}
-              />
-            </View>
+              <Text style={styles.time}>{s.eveningPushTime}</Text>
+            </Pressable>
           )}
         </View>
         <Text style={styles.hint}>
@@ -86,6 +96,38 @@ export function InputSettingsScreen() {
           устройстве после установки сборки.
         </Text>
       </ScrollView>
+
+      <Modal
+        visible={pickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPickerOpen(false)}
+      >
+        <Pressable style={styles.backdrop} onPress={() => setPickerOpen(false)}>
+          {/* Stop taps on the sheet from dismissing it. */}
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <Text style={styles.sheetTitle}>Время напоминания</Text>
+            <DateTimePicker
+              value={draft}
+              mode="time"
+              display="spinner"
+              onChange={(_, d) => {
+                if (d) setDraft(d);
+              }}
+              textColor={palette.ink}
+              style={styles.picker}
+            />
+            <View style={styles.actions}>
+              <Pressable onPress={() => setPickerOpen(false)} style={styles.action}>
+                <Text style={styles.actionMuted}>Отмена</Text>
+              </Pressable>
+              <Pressable onPress={commitPicker} style={styles.action}>
+                <Text style={styles.actionPrimary}>Готово</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -113,5 +155,35 @@ const makeStyles = (p: Palette) =>
     },
     rowTop: { borderTopColor: p.glassBorder, borderTopWidth: StyleSheet.hairlineWidth },
     label: { color: p.ink, fontSize: Typography.body.fontSize, flexShrink: 1 },
+    time: { color: p.ink, fontSize: Typography.body.fontSize, fontVariant: ['tabular-nums'] },
     hint: { color: p.dim2, fontSize: Typography.footnote.fontSize },
+    backdrop: {
+      flex: 1,
+      backgroundColor: p.scrim,
+      justifyContent: 'flex-end',
+    },
+    sheet: {
+      backgroundColor: p.sheetBg,
+      borderTopLeftRadius: Radius.card,
+      borderTopRightRadius: Radius.card,
+      paddingHorizontal: Spacing.lg,
+      paddingTop: Spacing.lg,
+      paddingBottom: Spacing.xl,
+      gap: Spacing.md,
+    },
+    sheetTitle: {
+      color: p.ink,
+      fontSize: Typography.body.fontSize,
+      fontWeight: '600',
+      textAlign: 'center',
+    },
+    picker: { alignSelf: 'center' },
+    actions: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    action: { paddingVertical: Spacing.sm, paddingHorizontal: Spacing.md },
+    actionMuted: { color: p.dim2, fontSize: Typography.body.fontSize },
+    actionPrimary: { color: p.pos, fontSize: Typography.body.fontSize, fontWeight: '600' },
   });

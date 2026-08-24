@@ -77,14 +77,16 @@ describe('computeAllowance — "можно сегодня" (shared by home + wid
     expect(a.perDayMinor).toBe(10_00); // 310.00 / 31
     expect(a.todaySpentMinor).toBe(3_00); // only the 2026-08-20 expense
     expect(a.periodSpentMinor).toBe(10_00); // both August expenses
+    expect(a.periodBudgetMinor).toBe(310_00); // full plan (nothing forfeited)
     expect(a.periodStartLocalDay).toBe('2026-08-01');
     expect(a.configured).toBe(true);
-    // carry = perDay(1000) × elapsed(20) − periodSpent(1000)
-    expect(a.carryMinor).toBe(10_00 * 20 - 10_00);
+    // carry counts only fully-passed days (today excluded): perDay·(elapsed−1)
+    // − (periodSpent − todaySpent) = 1000·19 − (1000 − 300) = 18300.
+    expect(a.carryMinor).toBe(10_00 * 19 - (10_00 - 3_00));
   });
 
-  it('spreads the plan over the REMAINING days on a fresh mid-month launch', () => {
-    // No earlier data → anchor is today (Aug 20); only Aug 20..31 count (12 days).
+  it('forfeits the untracked days rather than inflating perDay on a mid-month launch', () => {
+    // No earlier data → anchor is today (Aug 20); Aug 1..19 are forfeited.
     const a = computeAllowance({
       plan: plan({ period: 'month', amountMinor: 120_00, currency: 'BYN' }),
       recent: [tx({ id: 't1', localDay: '2026-08-20', amountMinor: -3_00 })],
@@ -95,16 +97,18 @@ describe('computeAllowance — "можно сегодня" (shared by home + wid
     });
 
     expect(a.periodStartLocalDay).toBe('2026-08-20'); // anchored to today
-    expect(a.daysInPeriod).toBe(12); // Aug 20 → Aug 31
+    expect(a.daysInPeriod).toBe(12); // Aug 20 → Aug 31 (tracked span)
     expect(a.daysLeft).toBe(12);
-    expect(a.perDayMinor).toBe(10_00); // 120.00 / 12
+    expect(a.perDayMinor).toBe(3_87); // 120.00 / 31 (full calendar days), truncated
     expect(a.periodSpentMinor).toBe(3_00);
-    // No phantom surplus: elapsed = 1 day → carry = 1000·1 − 300 = 700.
-    expect(a.carryMinor).toBe(10_00 - 3_00);
+    // Budget = plan − forfeited pre-anchor days = 12000 − 387·19 = 4647.
+    expect(a.periodBudgetMinor).toBe(46_47);
+    // First tracking day → no phantom surplus.
+    expect(a.carryMinor).toBe(0);
   });
 
   it('anchors to the first recorded day when data starts mid-period', () => {
-    // Data from Aug 10 → anchor Aug 10; Aug 10..31 = 22 days.
+    // Data from Aug 10 → anchor Aug 10; Aug 1..9 forfeited, Aug 10..31 tracked.
     const a = computeAllowance({
       plan: plan({ period: 'month', amountMinor: 220_00, currency: 'BYN' }),
       recent: [
@@ -118,14 +122,17 @@ describe('computeAllowance — "можно сегодня" (shared by home + wid
     });
 
     expect(a.periodStartLocalDay).toBe('2026-08-10');
-    expect(a.daysInPeriod).toBe(22); // Aug 10 → Aug 31
-    expect(a.perDayMinor).toBe(10_00); // 220.00 / 22
+    expect(a.daysInPeriod).toBe(22); // Aug 10 → Aug 31 (tracked span)
+    expect(a.perDayMinor).toBe(7_09); // 220.00 / 31 (full calendar days), truncated
     expect(a.periodSpentMinor).toBe(9_00); // 5.00 + 4.00 since Aug 10
-    // elapsed = Aug 10..20 = 11 days → carry = 1000·11 − 900 = 10100.
-    expect(a.carryMinor).toBe(10_00 * 11 - 9_00);
+    // Budget = 22000 − 709·9 = 15619.
+    expect(a.periodBudgetMinor).toBe(156_19);
+    // elapsed = Aug 10..20 = 11 days, today (Aug 20) excluded, spent-before = 5.00:
+    // carry = 709·10 − 500 = 6590.
+    expect(a.carryMinor).toBe(7_09 * 10 - 5_00);
   });
 
-  it('spreads a weekly plan across the remaining days of the week', () => {
+  it('keeps the natural daily rate for a weekly plan on a mid-week launch', () => {
     // 2026-08-20 is a Thursday, no activity → anchor today, Thu..Sun = 4 days.
     const a = computeAllowance({
       plan: plan({ period: 'week', amountMinor: 40_00, currency: 'BYN' }),
@@ -135,9 +142,10 @@ describe('computeAllowance — "можно сегодня" (shared by home + wid
       todayLocalDay: '2026-08-20',
       now,
     });
-    expect(a.daysInPeriod).toBe(4); // Thu..Sun
+    expect(a.daysInPeriod).toBe(4); // Thu..Sun (tracked span)
     expect(a.daysLeft).toBe(4);
-    expect(a.perDayMinor).toBe(10_00); // 40.00 / 4
+    expect(a.perDayMinor).toBe(5_71); // 40.00 / 7 (full week), truncated
+    expect(a.periodBudgetMinor).toBe(22_87); // 4000 − 571·3
     expect(a.periodStartLocalDay).toBe('2026-08-20');
   });
 
@@ -153,6 +161,7 @@ describe('computeAllowance — "можно сегодня" (shared by home + wid
     });
     expect(a.configured).toBe(true);
     expect(a.expectedBaseMinor).toBe(300_00);
+    expect(a.periodBudgetMinor).toBe(300_00); // full plan (tracking from Aug 1)
     expect(a.daysInPeriod).toBe(31);
     expect(a.perDayMinor).toBe(9_67); // trunc(300.00 / 31)
   });

@@ -1,6 +1,16 @@
-import { useCallback, useMemo } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 
 import { AppIcon } from '@components/AppIcon';
 import { openAccountSheet } from '@components/accountSheetRef';
@@ -25,6 +35,20 @@ import { computeAllowance, totalBalanceBaseMinor } from '@utils/summary';
 
 /** Shared font size for the top-row date and wallet-total cards (same type). */
 const TOP_ROW_FONT_SIZE = 14;
+
+/** Shared duration for the header collapse/expand layout animation. */
+const COLLAPSE_DURATION = 220;
+
+/**
+ * Minimum overscrollable distance (content − viewport, px) before the header is
+ * allowed to collapse. Must exceed the height the hero + account chips reclaim,
+ * or collapsing would grow the feed viewport enough to bounce the offset back up
+ * and re-expand — a flip-flop loop (same guard as the History screen).
+ */
+const COLLAPSE_MIN_SCROLL = 180;
+
+/** Pressable that participates in Reanimated layout animations (for the chips). */
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /** Net change of a day in base minor units (transfers excluded — internal moves). */
 function dayNetBaseMinor(txs: Transaction[]): number {
@@ -59,6 +83,27 @@ export function HomeScreen() {
     [categories],
   );
 
+  // Collapse the hero + account chips into single-line rows once the feed
+  // scrolls (mirrors the History screen). Gated on real scrollable room so it
+  // can never flip-flop when there is barely anything to scroll.
+  const [collapsed, setCollapsed] = useState(false);
+  const contentH = useRef(0);
+  const viewportH = useRef(0);
+
+  const onFeedScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const y = e.nativeEvent.contentOffset.y;
+      if (!collapsed) {
+        const maxScroll = contentH.current - viewportH.current;
+        if (maxScroll <= COLLAPSE_MIN_SCROLL) return;
+        if (y > 56) setCollapsed(true);
+      } else if (y <= 24) {
+        setCollapsed(false);
+      }
+    },
+    [collapsed],
+  );
+
   const { perDayMinor, todaySpent, carry, heroColor, configured, shortfallMinor, totalMinor } =
     useMemo(() => {
       const {
@@ -66,7 +111,7 @@ export function HomeScreen() {
         todaySpentMinor: spent,
         carryMinor,
         configured: isConfigured,
-        expectedBaseMinor,
+        periodBudgetMinor,
         periodSpentMinor,
       } = computeAllowance({
         plan: budgetPlan,
@@ -80,7 +125,7 @@ export function HomeScreen() {
       const color = usage < 0.8 ? palette.pos : usage < 1 ? palette.warn : palette.neg;
       // "Денег может не хватить": what's still planned to be spent this period vs.
       // how much money actually exists across all accounts (converted to base).
-      const remainingPlan = Math.max(0, expectedBaseMinor - periodSpentMinor);
+      const remainingPlan = Math.max(0, periodBudgetMinor - periodSpentMinor);
       const available = totalBalanceBaseMinor(accounts, balances, rates, base);
       // The "запас" is how far ahead of pace you are — but you can't carry more
       // than the money you actually own, so cap a positive surplus at the total
@@ -137,8 +182,12 @@ export function HomeScreen() {
   return (
     <View style={styles.canvas}>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        {/* Fixed top: info card + hero + accounts (only the feed scrolls) */}
-        <View style={styles.fixedTop}>
+        {/* Fixed top: info card + hero + accounts (only the feed scrolls). Layout-
+            animated so the hero/chips collapse glides and the feed follows. */}
+        <Animated.View
+          style={styles.fixedTop}
+          layout={LinearTransition.duration(COLLAPSE_DURATION)}
+        >
           {/* Top row: today (left) + wallet total (right, tappable) */}
           <View style={styles.topRow}>
             <View style={styles.todayCard}>
@@ -174,72 +223,143 @@ export function HomeScreen() {
             </Pressable>
           </View>
 
-          {/* Hero block */}
-          <Pressable onPress={onHeroPress} style={styles.hero} accessibilityRole="button">
-            <View style={styles.heroLabelRow}>
-              <Text {...textProps('micro')} style={styles.heroLabel}>
-                МОЖНО СЕГОДНЯ
-              </Text>
-              {insufficientFunds && (
-                <Pressable
-                  onPress={onWarningPress}
-                  hitSlop={10}
-                  accessibilityRole="button"
-                  accessibilityLabel="Денег может не хватить на план"
+          {/* Hero block — collapses to a single line (сумма слева · потрачено
+              справа) once the feed scrolls. */}
+          <Pressable onPress={onHeroPress} accessibilityRole="button">
+            <Animated.View
+              style={[styles.hero, collapsed && styles.heroCollapsed]}
+              layout={LinearTransition.duration(COLLAPSE_DURATION)}
+            >
+              {collapsed ? (
+                <Animated.View
+                  key="hero-min"
+                  entering={FadeIn.duration(200)}
+                  exiting={FadeOut.duration(120)}
+                  style={styles.heroCompactRow}
                 >
-                  <AppIcon name="warning" color={palette.warn} size={16} />
-                </Pressable>
-              )}
-            </View>
-            {configured ? (
-              <Money
-                minor={perDayMinor}
-                currency={base}
-                compact
-                options={{ hideCode: true }}
-                style={[styles.heroNumber, { color: heroColor }]}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.5}
-              />
-            ) : (
-              <Text style={[styles.heroNumber, { color: palette.dim }]}>—</Text>
-            )}
-            <View style={styles.heroFooter}>
-              {configured ? (
-                <Text
-                  {...textProps('footnote')}
-                  style={styles.heroSpent}
-                  numberOfLines={1}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.8}
-                >
-                  потрачено {formatMoneyCompact(todaySpent, base, { hideCode: true })} {base}
-                </Text>
+                  <View style={styles.heroCompactLeft}>
+                    {configured ? (
+                      <Money
+                        minor={perDayMinor}
+                        currency={base}
+                        compact
+                        style={[styles.heroCompactNumber, { color: heroColor }]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.6}
+                      />
+                    ) : (
+                      <Text style={[styles.heroCompactNumber, { color: palette.dim }]}>—</Text>
+                    )}
+                    {insufficientFunds && (
+                      <Pressable
+                        onPress={onWarningPress}
+                        hitSlop={10}
+                        accessibilityRole="button"
+                        accessibilityLabel="Денег может не хватить на план"
+                      >
+                        <AppIcon name="warning" color={palette.warn} size={16} />
+                      </Pressable>
+                    )}
+                  </View>
+                  {configured ? (
+                    <Text
+                      {...textProps('footnote')}
+                      style={styles.heroSpent}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.8}
+                    >
+                      потрачено {formatMoneyCompact(todaySpent, base, { hideCode: true })} {base}
+                    </Text>
+                  ) : (
+                    <Text {...textProps('footnote')} style={styles.heroSpent}>
+                      Задайте план →
+                    </Text>
+                  )}
+                </Animated.View>
               ) : (
-                <Text {...textProps('footnote')} style={styles.heroSpent}>
-                  Задайте план бюджета →
-                </Text>
-              )}
-              {configured && carry !== 0 && (
-                <View
-                  style={[styles.carry, { borderColor: carry > 0 ? palette.pos : palette.neg }]}
+                <Animated.View
+                  key="hero-full"
+                  entering={FadeIn.duration(200)}
+                  exiting={FadeOut.duration(120)}
                 >
-                  <Money
-                    minor={carry}
-                    currency={base}
-                    compact
-                    options={{ showPlus: true, hideCode: true }}
-                    style={[styles.carryText, { color: carry > 0 ? palette.pos : palette.neg }]}
-                  />
-                  <Text
-                    style={[styles.carryLabel, { color: carry > 0 ? palette.pos : palette.neg }]}
-                  >
-                    запас
-                  </Text>
-                </View>
+                  <View style={styles.heroLabelRow}>
+                    <Text {...textProps('micro')} style={styles.heroLabel}>
+                      МОЖНО СЕГОДНЯ
+                    </Text>
+                    {insufficientFunds && (
+                      <Pressable
+                        onPress={onWarningPress}
+                        hitSlop={10}
+                        accessibilityRole="button"
+                        accessibilityLabel="Денег может не хватить на план"
+                      >
+                        <AppIcon name="warning" color={palette.warn} size={16} />
+                      </Pressable>
+                    )}
+                  </View>
+                  {configured ? (
+                    <Money
+                      minor={perDayMinor}
+                      currency={base}
+                      compact
+                      options={{ hideCode: true }}
+                      style={[styles.heroNumber, { color: heroColor }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.5}
+                    />
+                  ) : (
+                    <Text style={[styles.heroNumber, { color: palette.dim }]}>—</Text>
+                  )}
+                  <View style={styles.heroFooter}>
+                    {configured ? (
+                      <Text
+                        {...textProps('footnote')}
+                        style={styles.heroSpent}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.8}
+                      >
+                        потрачено {formatMoneyCompact(todaySpent, base, { hideCode: true })} {base}
+                      </Text>
+                    ) : (
+                      <Text {...textProps('footnote')} style={styles.heroSpent}>
+                        Задайте план бюджета →
+                      </Text>
+                    )}
+                    {configured && carry !== 0 && (
+                      <View
+                        style={[
+                          styles.carry,
+                          { borderColor: carry > 0 ? palette.pos : palette.neg },
+                        ]}
+                      >
+                        <Money
+                          minor={carry}
+                          currency={base}
+                          compact
+                          options={{ showPlus: true, hideCode: true }}
+                          style={[
+                            styles.carryText,
+                            { color: carry > 0 ? palette.pos : palette.neg },
+                          ]}
+                        />
+                        <Text
+                          style={[
+                            styles.carryLabel,
+                            { color: carry > 0 ? palette.pos : palette.neg },
+                          ]}
+                        >
+                          запас
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </Animated.View>
               )}
-            </View>
+            </Animated.View>
           </Pressable>
 
           {/* Account blocks — horizontal scroll, add button at the end */}
@@ -250,93 +370,140 @@ export function HomeScreen() {
             contentContainerStyle={styles.chipsRow}
           >
             {accounts.map((a) => (
-              <Pressable
+              <AnimatedPressable
                 key={a.id}
-                style={styles.accountChip}
+                layout={LinearTransition.duration(COLLAPSE_DURATION)}
+                style={[styles.accountChip, collapsed && styles.accountChipCollapsed]}
                 onPress={() => openAccountSheet(a.id)}
               >
-                <View style={styles.accountNameRow}>
-                  <AppIcon name={a.icon} color={palette.dim} size={14} fallback="wallet-outline" />
-                  <Text {...textProps('caption')} style={styles.accountName} numberOfLines={1}>
-                    {a.name}
-                  </Text>
-                </View>
-                <Money
-                  minor={balances[a.id] ?? 0}
-                  currency={a.currency}
-                  style={styles.accountBalance}
-                />
-              </Pressable>
-            ))}
-            <Pressable style={styles.addChip} onPress={() => openAccountSheet()}>
-              <Text style={styles.addChipText}>＋ Счёт</Text>
-            </Pressable>
-          </ScrollView>
-        </View>
-
-        {/* Feed — floating day labels; each entry is its own category-tinted card */}
-        <ScrollView
-          style={styles.feedScroll}
-          contentContainerStyle={styles.feedContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {recent.length === 0 ? (
-            <Text {...textProps('footnote')} style={styles.empty}>
-              Пока пусто. Нажмите + и запишите первую трату.
-            </Text>
-          ) : (
-            days.map(([day, txs]) => (
-              <View key={day} style={styles.dayGroup}>
-                <View style={styles.dayHeader}>
-                  <Text {...textProps('caption')} style={styles.dayLabel}>
-                    {day}
-                  </Text>
-                  <Money
-                    minor={dayNetBaseMinor(txs)}
-                    currency={base}
-                    options={{ showPlus: true }}
-                    style={styles.dayTotal}
-                  />
-                </View>
-                {txs.map((t) => {
-                  const cat = t.categoryId ? categoryById[t.categoryId] : undefined;
-                  const isTransfer = t.kind === 'transfer';
-                  const accent = isTransfer ? palette.dim : (cat?.color ?? palette.ink);
-                  const iconName = isTransfer
-                    ? TRANSFER_ICON
-                    : (cat?.icon ??
-                      (t.amountMinor >= 0 ? INCOME_FALLBACK_ICON : EXPENSE_FALLBACK_ICON));
-                  const title = isTransfer ? 'Перевод' : t.note || cat?.name || 'Без категории';
-                  return (
-                    <Pressable
-                      key={t.id}
-                      onPress={() => openTransactionDetail(t)}
-                      style={[styles.txRow, { backgroundColor: hexToRgba(accent, 0.14) }]}
-                    >
-                      <View
-                        style={[styles.txIconWrap, { backgroundColor: hexToRgba(accent, 0.2) }]}
-                      >
-                        <AppIcon name={iconName} color={accent} size={18} />
-                      </View>
-                      <Text {...textProps('row')} style={styles.rowTitle} numberOfLines={1}>
-                        {title}
-                      </Text>
-                      <Money
-                        minor={t.amountMinor}
-                        currency={t.currency}
-                        options={{ showPlus: !isTransfer }}
-                        style={[
-                          styles.rowAmount,
-                          { color: t.amountMinor >= 0 && !isTransfer ? palette.pos : palette.ink },
-                        ]}
+                {collapsed ? (
+                  // Collapsed: one line — icon left, balance right.
+                  <View style={styles.chipCompactRow}>
+                    <AppIcon
+                      name={a.icon}
+                      color={palette.dim}
+                      size={16}
+                      fallback="wallet-outline"
+                    />
+                    <Money
+                      minor={balances[a.id] ?? 0}
+                      currency={a.currency}
+                      style={styles.accountBalanceCompact}
+                      numberOfLines={1}
+                    />
+                  </View>
+                ) : (
+                  <>
+                    <View style={styles.accountNameRow}>
+                      <AppIcon
+                        name={a.icon}
+                        color={palette.dim}
+                        size={14}
+                        fallback="wallet-outline"
                       />
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ))
-          )}
-        </ScrollView>
+                      <Text {...textProps('caption')} style={styles.accountName} numberOfLines={1}>
+                        {a.name}
+                      </Text>
+                    </View>
+                    <Money
+                      minor={balances[a.id] ?? 0}
+                      currency={a.currency}
+                      style={styles.accountBalance}
+                    />
+                  </>
+                )}
+              </AnimatedPressable>
+            ))}
+            <AnimatedPressable
+              layout={LinearTransition.duration(COLLAPSE_DURATION)}
+              style={styles.addChip}
+              onPress={() => openAccountSheet()}
+            >
+              <Text style={styles.addChipText}>＋ Счёт</Text>
+            </AnimatedPressable>
+          </ScrollView>
+        </Animated.View>
+
+        {/* Feed — floating day labels; each entry is its own category-tinted card.
+            Wrapped in a layout-animated view so it glides up/down in sync with the
+            header collapse instead of snapping. */}
+        <Animated.View
+          style={styles.feedWrap}
+          layout={LinearTransition.duration(COLLAPSE_DURATION)}
+        >
+          <ScrollView
+            style={styles.feedScroll}
+            contentContainerStyle={styles.feedContent}
+            showsVerticalScrollIndicator={false}
+            onScroll={onFeedScroll}
+            scrollEventThrottle={16}
+            onLayout={(e) => {
+              viewportH.current = e.nativeEvent.layout.height;
+            }}
+            onContentSizeChange={(_w, h) => {
+              contentH.current = h;
+            }}
+          >
+            {recent.length === 0 ? (
+              <Text {...textProps('footnote')} style={styles.empty}>
+                Пока пусто. Нажмите + и запишите первую трату.
+              </Text>
+            ) : (
+              days.map(([day, txs]) => (
+                <View key={day} style={styles.dayGroup}>
+                  <View style={styles.dayHeader}>
+                    <Text {...textProps('caption')} style={styles.dayLabel}>
+                      {day}
+                    </Text>
+                    <Money
+                      minor={dayNetBaseMinor(txs)}
+                      currency={base}
+                      options={{ showPlus: true }}
+                      style={styles.dayTotal}
+                    />
+                  </View>
+                  {txs.map((t) => {
+                    const cat = t.categoryId ? categoryById[t.categoryId] : undefined;
+                    const isTransfer = t.kind === 'transfer';
+                    const accent = isTransfer ? palette.dim : (cat?.color ?? palette.ink);
+                    const iconName = isTransfer
+                      ? TRANSFER_ICON
+                      : (cat?.icon ??
+                        (t.amountMinor >= 0 ? INCOME_FALLBACK_ICON : EXPENSE_FALLBACK_ICON));
+                    const title = isTransfer ? 'Перевод' : t.note || cat?.name || 'Без категории';
+                    return (
+                      <Pressable
+                        key={t.id}
+                        onPress={() => openTransactionDetail(t)}
+                        style={[styles.txRow, { backgroundColor: hexToRgba(accent, 0.14) }]}
+                      >
+                        <View
+                          style={[styles.txIconWrap, { backgroundColor: hexToRgba(accent, 0.2) }]}
+                        >
+                          <AppIcon name={iconName} color={accent} size={18} />
+                        </View>
+                        <Text {...textProps('row')} style={styles.rowTitle} numberOfLines={1}>
+                          {title}
+                        </Text>
+                        <Money
+                          minor={t.amountMinor}
+                          currency={t.currency}
+                          options={{ showPlus: !isTransfer }}
+                          style={[
+                            styles.rowAmount,
+                            {
+                              color: t.amountMinor >= 0 && !isTransfer ? palette.pos : palette.ink,
+                            },
+                          ]}
+                        />
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ))
+            )}
+          </ScrollView>
+        </Animated.View>
       </SafeAreaView>
 
       <Pressable
@@ -364,6 +531,7 @@ const makeStyles = (p: Palette) =>
       paddingTop: Spacing.xl,
       gap: Spacing.lg,
     },
+    feedWrap: { flex: 1 },
     feedScroll: { flex: 1 },
     feedContent: {
       paddingHorizontal: Spacing.screenPadding,
@@ -424,6 +592,20 @@ const makeStyles = (p: Palette) =>
       shadowRadius: 16,
       shadowOffset: { width: 0, height: 8 },
     },
+    // Collapsed hero — one line, tighter vertical padding.
+    heroCollapsed: { paddingVertical: Spacing.md },
+    heroCompactRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: Spacing.md,
+    },
+    heroCompactLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flexShrink: 1 },
+    heroCompactNumber: {
+      ...numberTextStyle,
+      fontSize: Typography.title.fontSize,
+      fontWeight: '700',
+    },
     heroLabel: { color: p.dim, letterSpacing: Typography.micro.letterSpacing },
     heroNumber: {
       ...numberTextStyle,
@@ -470,6 +652,13 @@ const makeStyles = (p: Palette) =>
       gap: 2,
       minWidth: 120,
     },
+    // Collapsed chip — one line (icon left, balance right), no name.
+    accountChipCollapsed: {
+      paddingVertical: Spacing.sm,
+      minWidth: 0,
+    },
+    chipCompactRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    accountBalanceCompact: { color: p.ink, fontSize: Typography.body.fontSize },
     accountNameRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     accountName: { color: p.dim, flexShrink: 1 },
     accountBalance: { color: p.ink, fontSize: Typography.headline.fontSize },

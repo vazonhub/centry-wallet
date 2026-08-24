@@ -10,7 +10,8 @@
  * The Home-screen widget, the evening reminder push, and the deep link all open
  * `centry://add` (also `centry://input`). There is no `add`/`input` route file,
  * so without this redirect Expo Router falls through to the sitemap. We send
- * every such tap to the tabs; the input sheet itself is opened from the raw
+ * every such tap to the Home tab (the input sheet always belongs over Главная,
+ * never whichever tab was last active); the sheet itself is opened from the raw
  * launch URL by `useWidgetDeepLink` once the root layout mounts. Anything else
  * is passed through untouched so dev-client / OAuth links keep working.
  */
@@ -21,7 +22,7 @@ export function redirectSystemPath({ path }: { path: string; initial: boolean })
     const withoutScheme = path.replace(/^[a-zA-Z][\w+.-]*:\/\//, '');
     const firstSegment = withoutScheme.replace(/^\/+/, '').split(/[/?#]/)[0];
     if (firstSegment === 'add' || firstSegment === 'input') {
-      return '/(tabs)';
+      return '/(tabs)/(home)';
     }
   } catch {
     // Malformed path — fall through to the default resolution below.

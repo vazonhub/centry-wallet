@@ -72,7 +72,7 @@ function rowNote(t: Transaction, category: Category | undefined): string {
 
 /** Builds the widget snapshot from the current data store slice. Pure. */
 export function buildWidgetSnapshot(input: BuildSnapshotInput): WidgetSnapshot {
-  const { perDayMinor, todaySpentMinor, daysLeft, expectedBaseMinor, periodSpentMinor } =
+  const { perDayMinor, todaySpentMinor, daysLeft, periodBudgetMinor, periodSpentMinor } =
     computeAllowance({
       plan: input.plan,
       recent: input.recent,
@@ -81,7 +81,7 @@ export function buildWidgetSnapshot(input: BuildSnapshotInput): WidgetSnapshot {
       todayLocalDay: input.todayLocalDay,
       now: input.now,
     });
-  const periodRemainingMinor = Math.max(0, expectedBaseMinor - periodSpentMinor);
+  const periodRemainingMinor = Math.max(0, periodBudgetMinor - periodSpentMinor);
 
   const categoryById = new Map(input.categories.map((c) => [c.id, c]));
 

@@ -358,6 +358,7 @@ export function HistoryScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.filtersScroll}
         contentContainerStyle={styles.filters}
       >
         {(
@@ -457,76 +458,83 @@ export function HistoryScreen() {
       <SafeAreaView style={styles.safe} edges={['top']}>
         {MonthBar}
         {FixedStats}
-        <FlashList
-          data={rows}
-          onScroll={onScroll}
-          scrollEventThrottle={16}
-          onLayout={(e) => {
-            viewportH.current = e.nativeEvent.layout.height;
-          }}
-          onContentSizeChange={(_w, h) => {
-            contentH.current = h;
-          }}
-          ListHeaderComponent={Header}
-          ListEmptyComponent={
-            <Text {...textProps('footnote')} style={styles.empty}>
-              В этом месяце записей нет.
-            </Text>
-          }
-          keyExtractor={(row) => (row.type === 'header' ? `h:${row.day}` : `t:${row.tx.id}`)}
-          getItemType={(row) => row.type}
-          contentContainerStyle={{
-            ...styles.listContent,
-            paddingBottom: insets.bottom + TAB_BAR_HEIGHT + Spacing.md,
-          }}
-          renderItem={({ item }) => {
-            if (item.type === 'header') {
+        {/* Wrapped in a layout-animated view so, when the category block above
+            collapses/expands, the list glides to its new position in sync with
+            that block's LinearTransition instead of snapping (which read as the
+            feed "jumping"). Same duration → the two move as one. */}
+        <Animated.View style={styles.listWrap} layout={LinearTransition.duration(240)}>
+          <FlashList
+            data={rows}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            onLayout={(e) => {
+              viewportH.current = e.nativeEvent.layout.height;
+            }}
+            onContentSizeChange={(_w, h) => {
+              contentH.current = h;
+            }}
+            ListHeaderComponent={Header}
+            ListEmptyComponent={
+              <Text {...textProps('footnote')} style={styles.empty}>
+                В этом месяце записей нет.
+              </Text>
+            }
+            keyExtractor={(row) => (row.type === 'header' ? `h:${row.day}` : `t:${row.tx.id}`)}
+            getItemType={(row) => row.type}
+            contentContainerStyle={{
+              ...styles.listContent,
+              paddingBottom: insets.bottom + TAB_BAR_HEIGHT + Spacing.md,
+            }}
+            renderItem={({ item }) => {
+              if (item.type === 'header') {
+                return (
+                  <View style={styles.dayHeader}>
+                    <Text {...textProps('caption')} style={styles.dayLabel}>
+                      {item.day}
+                    </Text>
+                    <Money
+                      minor={item.net}
+                      currency={base}
+                      options={{ showPlus: true }}
+                      style={styles.dayTotal}
+                    />
+                  </View>
+                );
+              }
+              const t = item.tx;
+              const cat = t.categoryId ? categoryById[t.categoryId] : undefined;
+              const isTransfer = t.kind === 'transfer';
+              const accent = isTransfer ? palette.dim : (cat?.color ?? palette.ink);
+              const iconName = isTransfer
+                ? TRANSFER_ICON
+                : (cat?.icon ??
+                  (t.amountMinor >= 0 ? INCOME_FALLBACK_ICON : EXPENSE_FALLBACK_ICON));
+              const title = isTransfer ? 'Перевод' : t.note || cat?.name || 'Без категории';
               return (
-                <View style={styles.dayHeader}>
-                  <Text {...textProps('caption')} style={styles.dayLabel}>
-                    {item.day}
+                <Pressable
+                  style={[styles.row, { backgroundColor: hexToRgba(accent, 0.14) }]}
+                  onPress={() => onRowPress(t)}
+                >
+                  <View style={[styles.rowIconWrap, { backgroundColor: hexToRgba(accent, 0.2) }]}>
+                    <AppIcon name={iconName} color={accent} size={18} />
+                  </View>
+                  <Text {...textProps('row')} style={styles.rowTitle} numberOfLines={1}>
+                    {title}
                   </Text>
                   <Money
-                    minor={item.net}
-                    currency={base}
-                    options={{ showPlus: true }}
-                    style={styles.dayTotal}
+                    minor={t.amountMinor}
+                    currency={t.currency}
+                    options={{ showPlus: !isTransfer }}
+                    style={[
+                      styles.rowAmount,
+                      { color: t.amountMinor >= 0 && !isTransfer ? palette.pos : palette.ink },
+                    ]}
                   />
-                </View>
+                </Pressable>
               );
-            }
-            const t = item.tx;
-            const cat = t.categoryId ? categoryById[t.categoryId] : undefined;
-            const isTransfer = t.kind === 'transfer';
-            const accent = isTransfer ? palette.dim : (cat?.color ?? palette.ink);
-            const iconName = isTransfer
-              ? TRANSFER_ICON
-              : (cat?.icon ?? (t.amountMinor >= 0 ? INCOME_FALLBACK_ICON : EXPENSE_FALLBACK_ICON));
-            const title = isTransfer ? 'Перевод' : t.note || cat?.name || 'Без категории';
-            return (
-              <Pressable
-                style={[styles.row, { backgroundColor: hexToRgba(accent, 0.14) }]}
-                onPress={() => onRowPress(t)}
-              >
-                <View style={[styles.rowIconWrap, { backgroundColor: hexToRgba(accent, 0.2) }]}>
-                  <AppIcon name={iconName} color={accent} size={18} />
-                </View>
-                <Text {...textProps('row')} style={styles.rowTitle} numberOfLines={1}>
-                  {title}
-                </Text>
-                <Money
-                  minor={t.amountMinor}
-                  currency={t.currency}
-                  options={{ showPlus: !isTransfer }}
-                  style={[
-                    styles.rowAmount,
-                    { color: t.amountMinor >= 0 && !isTransfer ? palette.pos : palette.ink },
-                  ]}
-                />
-              </Pressable>
-            );
-          }}
-        />
+            }}
+          />
+        </Animated.View>
       </SafeAreaView>
       {MonthPicker}
     </View>
@@ -537,6 +545,7 @@ const makeStyles = (p: Palette) =>
   StyleSheet.create({
     canvas: { flex: 1, backgroundColor: p.canvasBase },
     safe: { flex: 1 },
+    listWrap: { flex: 1 },
     listContent: { paddingHorizontal: Spacing.screenPadding },
     monthBar: {
       paddingHorizontal: Spacing.screenPadding,
@@ -615,7 +624,11 @@ const makeStyles = (p: Palette) =>
       borderRadius: Radius.md,
       backgroundColor: p.glassLightBg,
     },
-    filters: { flexDirection: 'row', gap: Spacing.sm, paddingRight: Spacing.sm },
+    // Full-bleed scroller (mirrors the Home account chips): cancel the list's
+    // screen padding so chips scroll to the real screen edge, but keep the
+    // first/last chip inset via the content padding.
+    filtersScroll: { marginHorizontal: -Spacing.screenPadding },
+    filters: { flexDirection: 'row', gap: Spacing.sm, paddingHorizontal: Spacing.screenPadding },
     filterChip: {
       paddingHorizontal: Spacing.lg,
       paddingVertical: Spacing.sm,

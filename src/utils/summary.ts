@@ -106,6 +106,13 @@ export interface Allowance {
   daysInPeriod: number;
   /** The whole planned spend for the period, in base minor units. */
   expectedBaseMinor: number;
+  /**
+   * Base-minor available to spend across the tracked span — the plan minus the
+   * share of the days that had already elapsed before tracking began (those days
+   * are forfeited, not redistributed). Equals the whole plan when tracking from
+   * the period's first day.
+   */
+  periodBudgetMinor: number;
   /** Base-minor already spent this period (expenses only). */
   periodSpentMinor: number;
   /** First day of the current period, 'YYYY-MM-DD' (local). */
@@ -118,15 +125,19 @@ export interface Allowance {
  * The single source of the home "можно сегодня" math, shared by the home screen
  * and the WidgetKit snapshot so the two can never drift (the widget must never
  * recompute this in Swift — docs/DATA_MODEL.md#снимок-для-виджета). Linear model:
- * the planned spend is spread evenly across the period; the carry-over plate
- * tracks deviation from that pace. The plan is a standalone budget — incomes/
- * expenses never change it, and account balances do NOT feed the daily number
- * (only the separate "денег может не хватить" warning).
+ * the plan is a flat daily rate over the FULL calendar period (perDay = plan ÷
+ * calendar days), and the carry-over plate tracks deviation from that pace. The
+ * plan is a standalone budget — incomes/expenses never change it, and account
+ * balances do NOT feed the daily number (only the separate "денег может не
+ * хватить" warning).
  *
- * The period is narrowed to what the user has actually been tracking: the daily
- * number and the "запас" are anchored to the first recorded activity day of the
- * period (or today, on a fresh mid-period launch), so untracked earlier days
- * never inflate the surplus (owner, 2026-08-23 — "на остаток периода").
+ * The daily rate stays the natural calendar rate even on a mid-period first
+ * launch; instead of inflating it, the budget for the days that elapsed BEFORE
+ * tracking began is forfeited (owner, 2026-08-24). So starting on the 24th of a
+ * 31-day month with a 620 plan keeps perDay at 20 and leaves 20 × 8 = 160 for
+ * the rest of the month, with no phantom "запас". The daily number and the
+ * "запас" are anchored to the first recorded activity day of the period (or
+ * today, on a fresh mid-period launch — `firstActivityLocalDay`).
  */
 export function computeAllowance(i: AllowanceInput): Allowance {
   const bounds = periodBounds(i.plan.period, i.now);
@@ -142,10 +153,22 @@ export function computeAllowance(i: AllowanceInput): Allowance {
         )
       : 0;
 
-  const perDayMinor = perDay(expectedBaseMinor, eff.daysInPeriod);
+  // Flat daily rate over the whole calendar period — never inflated by a late start.
+  const perDayMinor = perDay(expectedBaseMinor, bounds.daysInPeriod);
   const todaySpentMinor = todaySpentBaseMinor(i.recent, i.todayLocalDay);
   const periodSpentMinor = periodSpentBaseMinor(i.recent, eff.startLocalDay);
-  const carryMinor = carryOver(perDayMinor, eff.daysElapsed, periodSpentMinor);
+  // Days elapsed before the anchor forfeit their share of the plan; only the
+  // budget from the anchor onward is spendable.
+  const daysBeforeAnchor = bounds.daysInPeriod - eff.daysInPeriod;
+  const periodBudgetMinor = Math.max(0, expectedBaseMinor - perDayMinor * daysBeforeAnchor);
+  // Carry-over ("запас") is the surplus/deficit over days that have FULLY passed;
+  // today is excluded — its allowance is still "можно сегодня", not surplus yet —
+  // so a first tracking day shows no reserve.
+  const carryMinor = carryOver(
+    perDayMinor,
+    eff.daysElapsed - 1,
+    periodSpentMinor - todaySpentMinor,
+  );
   return {
     perDayMinor,
     todaySpentMinor,
@@ -153,6 +176,7 @@ export function computeAllowance(i: AllowanceInput): Allowance {
     daysLeft: bounds.daysLeft,
     daysInPeriod: eff.daysInPeriod,
     expectedBaseMinor,
+    periodBudgetMinor,
     periodSpentMinor,
     periodStartLocalDay: eff.startLocalDay,
     configured: expectedBaseMinor > 0,

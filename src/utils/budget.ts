@@ -102,8 +102,10 @@ export interface EffectivePeriod {
  * a mid-period first launch does not credit a phantom surplus for untracked
  * earlier days (owner, 2026-08-23). The effective start is the first recorded
  * activity day in the period (`firstActivityLocalDay`), or today when there is
- * none — clamped into `[periodStart, today]`. The plan amount is then treated as
- * the budget for THIS remaining span: perDay = plan ÷ `daysInPeriod`.
+ * none — clamped into `[periodStart, today]`. `daysInPeriod` here is the tracked
+ * span (anchor → period end); the daily rate itself is still plan ÷ the FULL
+ * calendar period, and the days before the anchor forfeit their share of the
+ * plan rather than inflating the rate (owner, 2026-08-24 — see `computeAllowance`).
  */
 export function effectivePeriod(
   bounds: PeriodBounds,

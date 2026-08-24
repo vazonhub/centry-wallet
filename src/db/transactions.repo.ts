@@ -86,6 +86,16 @@ export async function listRecentTransactions(limit = 50): Promise<Transaction[]>
   return rows.map(mapRow);
 }
 
+/** Every non-deleted transaction, oldest first — the full CSV export set. */
+export async function listAllTransactions(): Promise<Transaction[]> {
+  const db = getDb();
+  const rows = await db.getAllAsync<TransactionRow>(
+    `SELECT * FROM transactions WHERE deleted_at IS NULL
+     ORDER BY occurred_at ASC, created_at ASC;`,
+  );
+  return rows.map(mapRow);
+}
+
 /** Transactions for a month, `monthPrefix` = 'YYYY-MM' (matched against local_day). */
 export async function listTransactionsByMonth(monthPrefix: string): Promise<Transaction[]> {
   const db = getDb();

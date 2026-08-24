@@ -112,9 +112,11 @@ Pre-commit (husky + lint-staged) гоняет prettier + `eslint --fix` на sta
 
 **Настройки → Данные / О приложении переработаны (2026-08-24, ветка `feature/data-about-screens`):** Данные — секции «Экспорт» (CSV + пояснение) и «Данные» (**«Обновить виджет»** — принудительный `DataController.refreshWidget` → `refreshWidgetSnapshot`; «Удалить все данные»). О приложении — секция «Ссылки» (Telegram `t.me/multibelbet`, GitHub `vazonhub/centry-wallet` через `Linking.openURL` + Ionicons) и версия внизу. Экраны разбиты на секции с заголовками (паттерн Bsuir).
 
+**Локализация RU/EN реализована (2026-08-24, ветка `feature/i18n-ru-en`):** `i18next` + `react-i18next`, словари `src/i18n/{ru,en}.ts` (en типизирован как `typeof ru` → пропущенный ключ = ошибка сборки; `i18next.d.ts` типизирует `t('…')`). Дефолт — язык устройства (RU→ru, иначе en); переключатель в «Настройки». `applyLanguage` синхронит i18next + **формат денег** (`@utils/money.setMoneyLocale`: ru `1 234,56` / en `1,234.56`, целочисленная математика не меняется, правило 7) + **даты** (`@utils/date`: рус/англ месяцы и дни). Системные категории и счёт «Основной» локализуются по стабильному id/ключу (`@utils/displayName`) — переименованные пользователем сохраняют имя. CSV и снимок виджета получают локализованные метки инъекцией (билдеры остаются чистыми/тестируемыми). Экраны переведены через `useTranslation`; нативный таб-бар — тоже. **Siri двуязычный:** `CentryShortcuts` содержит RU+EN фразы (`CFBundleLocalizations = ["ru","en"]`).
+
 **Планы (в следующих версиях):** импорт CSV (обратно к экспорту); ссылка на политику конфиденциальности в «О приложении» (текст готов — [`docs/GUIDE_PRIVACY.md`](docs/GUIDE_PRIVACY.md), нужен опубликованный URL).
 
-Осталось (владелец): **сборка на устройстве** — `APPLE_TEAM_ID` в `.env` → `npm run prebuild` → Xcode → Run; проверить виджет, вечерний пуш и **Siri** на девайсе (нужен, скорее всего, платный Apple Developer). Siri: сказать «Hey Siri, добавить трату в Centry» (iOS 17+) → приложение открывает шит ввода, заполненный из фразы. Что нужно от владельца — [`WHAT_I_NEED_FROM_YOU.md`](WHAT_I_NEED_FROM_YOU.md).
+Осталось (владелец): **сборка на устройстве** — `APPLE_TEAM_ID` в `.env` → `npm run prebuild` → Xcode → Run; проверить виджет, вечерний пуш и **Siri** на девайсе (нужен, скорее всего, платный Apple Developer). Siri (iOS 18+, `OpenURLIntent`): «Hey Siri, добавить трату в Centry» / «Add expense to Centry» → шит ввода, заполненный из фразы. Что нужно от владельца — [`WHAT_I_NEED_FROM_YOU.md`](WHAT_I_NEED_FROM_YOU.md).
 
 ## Code style (как в Bsuir)
 

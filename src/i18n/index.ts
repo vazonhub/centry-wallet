@@ -35,8 +35,7 @@ const getDeviceLanguageTag = (): string | undefined => {
 /** Maps the device locale to a supported language: Russian → 'ru', else 'en'. */
 export const getSystemLanguage = (): LanguageChoice => {
   const tag = getDeviceLanguageTag();
-  if (tag === 'ru') return 'ru';
-  return tag ? 'en' : 'ru';
+  return tag === 'ru' ? 'ru' : 'en';
 };
 
 void i18n.use(initReactI18next).init({
@@ -45,7 +44,7 @@ void i18n.use(initReactI18next).init({
     en: { translation: en },
   },
   lng: getSystemLanguage(),
-  fallbackLng: 'ru',
+  fallbackLng: 'en',
   interpolation: { escapeValue: false },
   returnNull: false,
 });
@@ -56,7 +55,7 @@ void i18n.use(initReactI18next).init({
  * point the settings store and bootstrap call so all three stay in lock-step.
  */
 export function applyLanguage(lang: LanguageChoice): void {
-  if (!SUPPORTED.includes(lang)) lang = 'ru';
+  if (!SUPPORTED.includes(lang)) lang = 'en';
   void i18n.changeLanguage(lang);
   setMoneyLocale(lang);
   setDateLocale(lang);

@@ -10,19 +10,22 @@ export const DEFAULT_BASE_CURRENCY: CurrencyCode = 'BYN';
 
 export interface CurrencyMeta {
   code: CurrencyCode;
-  /** Russian display name. */
+  /**
+   * Fallback English display name. The picker localizes via
+   * `@utils/displayName#currencyName` (i18n keys) — this is only a fallback.
+   */
   name: string;
   symbol: string;
 }
 
 export const COMMON_CURRENCIES: readonly CurrencyMeta[] = [
-  { code: 'BYN', name: 'Белорусский рубль', symbol: 'Br' },
-  { code: 'USD', name: 'Доллар США', symbol: '$' },
-  { code: 'EUR', name: 'Евро', symbol: '€' },
-  { code: 'RUB', name: 'Российский рубль', symbol: '₽' },
-  { code: 'PLN', name: 'Польский злотый', symbol: 'zł' },
-  { code: 'UAH', name: 'Украинская гривна', symbol: '₴' },
-  { code: 'GBP', name: 'Фунт стерлингов', symbol: '£' },
-  { code: 'GEL', name: 'Грузинский лари', symbol: '₾' },
-  { code: 'KZT', name: 'Казахстанский тенге', symbol: '₸' },
+  { code: 'BYN', name: 'Belarusian ruble', symbol: 'Br' },
+  { code: 'USD', name: 'US dollar', symbol: '$' },
+  { code: 'EUR', name: 'Euro', symbol: '€' },
+  { code: 'RUB', name: 'Russian ruble', symbol: '₽' },
+  { code: 'PLN', name: 'Polish zloty', symbol: 'zł' },
+  { code: 'UAH', name: 'Ukrainian hryvnia', symbol: '₴' },
+  { code: 'GBP', name: 'Pound sterling', symbol: '£' },
+  { code: 'GEL', name: 'Georgian lari', symbol: '₾' },
+  { code: 'KZT', name: 'Kazakhstani tenge', symbol: '₸' },
 ] as const;

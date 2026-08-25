@@ -1,7 +1,13 @@
-import type { Translations } from './ru';
-
-/** English strings. Typed as the RU shape so a missing key is a compile error. */
-export const en: Translations = {
+/**
+ * English strings — the source of truth for the translation keys. The primary
+ * audience is English-speaking, so EN is the base: `ru.ts` is typed as
+ * `Translations` (= typeof en), so a missing Russian key is a compile error,
+ * and `src/i18n/i18next.d.ts` types every `t('…')` against this shape.
+ *
+ * UI copy stays in these files. Money is still formatted only by `@utils/money`;
+ * dates by `@utils/date`; seeded category/account names by `@utils/displayName`.
+ */
+export const en = {
   common: {
     cancel: 'Cancel',
     delete: 'Delete',
@@ -65,6 +71,7 @@ export const en: Translations = {
   about: {
     title: 'About',
     links: 'LINKS',
+    privacy: 'Privacy Policy',
     appInfo: 'ABOUT',
     version: 'Version',
     footnote:
@@ -108,6 +115,7 @@ export const en: Translations = {
     transfer: 'Transfer',
     fromAccount: 'FROM ACCOUNT',
     toAccount: 'TO ACCOUNT',
+    rate: 'RATE',
     total: 'TOTAL ({{currency}})',
     notePlaceholder: 'Note (optional)',
     date: 'DATE',
@@ -118,6 +126,8 @@ export const en: Translations = {
       'For {{period}} the plan still allows spending {{amount}} beyond what you have in accounts. Consider lowering the budget plan or topping up an account.',
     totalA11y: 'Total money and balance chart',
     insufficientA11y: 'You may run short of your plan',
+    periodWeek: 'the week',
+    periodMonth: 'the month',
     spent: 'spent',
     setPlanShort: 'Set a plan →',
     allowanceLabel: 'CAN SPEND TODAY',
@@ -280,3 +290,5 @@ export const en: Translations = {
     transfers: 'Transfers',
   },
 };
+
+export type Translations = typeof en;

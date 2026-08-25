@@ -12,6 +12,7 @@ import { Radius, Spacing, TAB_BAR_HEIGHT, Typography } from '@theme';
 
 const TELEGRAM_URL = 'https://t.me/multibelbet';
 const GITHUB_URL = 'https://github.com/vazonhub/centry-wallet';
+const PRIVACY_URL = 'https://kostyabet.github.io/centry/privacy.html';
 
 export function AboutScreen() {
   const palette = usePalette();
@@ -41,6 +42,12 @@ export function AboutScreen() {
           <Pressable style={styles.navRow} onPress={() => void Linking.openURL(GITHUB_URL)}>
             <Ionicons name="logo-github" size={20} color={palette.accent} />
             <Text style={styles.navLabel}>GitHub</Text>
+            <Ionicons name="open-outline" size={18} color={palette.dim2} />
+          </Pressable>
+          <View style={styles.separator} />
+          <Pressable style={styles.navRow} onPress={() => void Linking.openURL(PRIVACY_URL)}>
+            <Ionicons name="shield-checkmark-outline" size={20} color={palette.accent} />
+            <Text style={styles.navLabel}>{t('about.privacy')}</Text>
             <Ionicons name="open-outline" size={18} color={palette.dim2} />
           </Pressable>
         </View>

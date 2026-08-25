@@ -81,7 +81,7 @@ const WEEKDAYS_FULL: Record<DateLocale, string[]> = {
   en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
 };
 
-let dateLocale: DateLocale = 'ru';
+let dateLocale: DateLocale = 'en';
 
 /** Switches the language of month/weekday names. Called from the i18n wiring. */
 export function setDateLocale(locale: DateLocale): void {

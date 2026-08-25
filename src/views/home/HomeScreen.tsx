@@ -32,7 +32,6 @@ import { displayAccountName, displayCategoryName } from '@utils/displayName';
 import { hexToRgba } from '@utils/color';
 import { hapticLight } from '@utils/haptics';
 import { convertToBase, formatMoney, formatMoneyCompact } from '@utils/money';
-import { periodLabel } from '@utils/budget';
 import { computeAllowance, totalBalanceBaseMinor } from '@utils/summary';
 
 /** Shared font size for the top-row date and wallet-total cards (same type). */
@@ -158,7 +157,7 @@ export function HomeScreen() {
     Alert.alert(
       t('home.insufficientTitle'),
       t('home.insufficientBody', {
-        period: periodLabel(budgetPlan.period),
+        period: t(budgetPlan.period === 'week' ? 'home.periodWeek' : 'home.periodMonth'),
         amount: formatMoney(Math.max(0, shortfallMinor), base),
       }),
       [{ text: t('common.ok') }],

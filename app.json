@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "by.vazon.centry",
-      "buildNumber": "4",
+      "buildNumber": "5",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleLocalizations": ["ru", "en"],

@@ -1,0 +1,184 @@
+import type { Account, Transaction } from '@models';
+
+import { type BudgetPlan, effectivePeriod, periodBounds } from './budget';
+import { carryOver, convertToBase, perDay } from './money';
+
+const E6_ONE = 1_000_000;
+
+/**
+ * Pure summary math for the home screen (docs/UX_SPEC.md#главная). Kept free of
+ * DB/store access so it is unit-tested directly. Rates map: currency → rate to
+ * base ×1e6 (the base currency itself is treated as 1e6).
+ */
+
+/** Sum of all account balances converted to the base currency (minor units). */
+export function totalBalanceBaseMinor(
+  accounts: Account[],
+  balances: Record<string, number>,
+  rates: Record<string, number>,
+  base: string,
+): number {
+  let total = 0;
+  for (const a of accounts) {
+    const bal = balances[a.id] ?? 0;
+    const rate = a.currency === base ? E6_ONE : (rates[a.currency] ?? E6_ONE);
+    total += convertToBase(bal, rate);
+  }
+  return total;
+}
+
+/**
+ * Amount spent today in the base currency (minor units), using each
+ * transaction's frozen rate (rule 2). Expenses only (negative amounts).
+ */
+export function todaySpentBaseMinor(recent: Transaction[], todayLocalDay: string): number {
+  let spent = 0;
+  for (const t of recent) {
+    if (t.kind === 'transfer') continue; // internal move, not spending (matches carry-over)
+    if (t.localDay !== todayLocalDay) continue;
+    if (t.amountMinor >= 0) continue;
+    spent += convertToBase(-t.amountMinor, t.rateToBaseE6);
+  }
+  return spent;
+}
+
+/**
+ * Expenses in the base currency (minor units) spent since (and including) the
+ * period start day — 'YYYY-MM-DD' strings compare lexicographically. Transfers
+ * are excluded (they are not spending). Feeds the carry-over plate (B10).
+ */
+export function periodSpentBaseMinor(recent: Transaction[], periodStartLocalDay: string): number {
+  let spent = 0;
+  for (const t of recent) {
+    if (t.kind === 'transfer') continue;
+    if (t.amountMinor >= 0) continue;
+    if (t.localDay < periodStartLocalDay) continue;
+    spent += convertToBase(-t.amountMinor, t.rateToBaseE6);
+  }
+  return spent;
+}
+
+/**
+ * Earliest recorded activity day within [periodStart, today], or null when the
+ * user has no transactions in the period yet. Any kind counts (a transfer or an
+ * income is still evidence the user was tracking that day) — it anchors the
+ * allowance so untracked earlier days don't inflate the "запас".
+ */
+export function firstActivityLocalDay(
+  recent: Transaction[],
+  periodStartLocalDay: string,
+  todayLocalDay: string,
+): string | null {
+  let earliest: string | null = null;
+  for (const t of recent) {
+    if (t.localDay < periodStartLocalDay) continue;
+    if (t.localDay > todayLocalDay) continue;
+    if (earliest === null || t.localDay < earliest) earliest = t.localDay;
+  }
+  return earliest;
+}
+
+export interface AllowanceInput {
+  /** Planned spend for the current period (calendar week/month). */
+  plan: BudgetPlan;
+  recent: Transaction[];
+  /** Base currency code (the plan amount is converted into it). */
+  base: string;
+  /** currency → rate to base ×1e6, to convert a foreign plan amount to base. */
+  rates: Record<string, number>;
+  /** Today's local day 'YYYY-MM-DD' (device timezone at call time). */
+  todayLocalDay: string;
+  /** Wall-clock instant; injectable so the math stays unit-testable. */
+  now: Date;
+}
+
+/** Everything the "можно сегодня" hero (and the widget snapshot) needs. */
+export interface Allowance {
+  /** Daily budget = planned spend ÷ days in the period. */
+  perDayMinor: number;
+  /** Base-minor spent today (expenses only). */
+  todaySpentMinor: number;
+  /** Period surplus (+) / deficit (−) in base minor units (B10). */
+  carryMinor: number;
+  /** Whole days remaining in the period including today (≥ 1). */
+  daysLeft: number;
+  /** Whole days in the current period. */
+  daysInPeriod: number;
+  /** The whole planned spend for the period, in base minor units. */
+  expectedBaseMinor: number;
+  /**
+   * Base-minor available to spend across the tracked span — the plan minus the
+   * share of the days that had already elapsed before tracking began (those days
+   * are forfeited, not redistributed). Equals the whole plan when tracking from
+   * the period's first day.
+   */
+  periodBudgetMinor: number;
+  /** Base-minor already spent this period (expenses only). */
+  periodSpentMinor: number;
+  /** First day of the current period, 'YYYY-MM-DD' (local). */
+  periodStartLocalDay: string;
+  /** False until a positive plan amount has been set. */
+  configured: boolean;
+}
+
+/**
+ * The single source of the home "можно сегодня" math, shared by the home screen
+ * and the WidgetKit snapshot so the two can never drift (the widget must never
+ * recompute this in Swift — docs/DATA_MODEL.md#снимок-для-виджета). Linear model:
+ * the plan is a flat daily rate over the FULL calendar period (perDay = plan ÷
+ * calendar days), and the carry-over plate tracks deviation from that pace. The
+ * plan is a standalone budget — incomes/expenses never change it, and account
+ * balances do NOT feed the daily number (only the separate "денег может не
+ * хватить" warning).
+ *
+ * The daily rate stays the natural calendar rate even on a mid-period first
+ * launch; instead of inflating it, the budget for the days that elapsed BEFORE
+ * tracking began is forfeited (owner, 2026-08-24). So starting on the 24th of a
+ * 31-day month with a 620 plan keeps perDay at 20 and leaves 20 × 8 = 160 for
+ * the rest of the month, with no phantom "запас". The daily number and the
+ * "запас" are anchored to the first recorded activity day of the period (or
+ * today, on a fresh mid-period launch — `firstActivityLocalDay`).
+ */
+export function computeAllowance(i: AllowanceInput): Allowance {
+  const bounds = periodBounds(i.plan.period, i.now);
+  const anchor = firstActivityLocalDay(i.recent, bounds.startLocalDay, i.todayLocalDay);
+  const eff = effectivePeriod(bounds, anchor, i.todayLocalDay);
+
+  // The plan amount is entered in its own currency; convert to base.
+  const expectedBaseMinor =
+    i.plan.amountMinor > 0
+      ? convertToBase(
+          i.plan.amountMinor,
+          i.plan.currency === i.base ? E6_ONE : (i.rates[i.plan.currency] ?? E6_ONE),
+        )
+      : 0;
+
+  // Flat daily rate over the whole calendar period — never inflated by a late start.
+  const perDayMinor = perDay(expectedBaseMinor, bounds.daysInPeriod);
+  const todaySpentMinor = todaySpentBaseMinor(i.recent, i.todayLocalDay);
+  const periodSpentMinor = periodSpentBaseMinor(i.recent, eff.startLocalDay);
+  // Days elapsed before the anchor forfeit their share of the plan; only the
+  // budget from the anchor onward is spendable.
+  const daysBeforeAnchor = bounds.daysInPeriod - eff.daysInPeriod;
+  const periodBudgetMinor = Math.max(0, expectedBaseMinor - perDayMinor * daysBeforeAnchor);
+  // Carry-over ("запас") is the surplus/deficit over days that have FULLY passed;
+  // today is excluded — its allowance is still "можно сегодня", not surplus yet —
+  // so a first tracking day shows no reserve.
+  const carryMinor = carryOver(
+    perDayMinor,
+    eff.daysElapsed - 1,
+    periodSpentMinor - todaySpentMinor,
+  );
+  return {
+    perDayMinor,
+    todaySpentMinor,
+    carryMinor,
+    daysLeft: bounds.daysLeft,
+    daysInPeriod: eff.daysInPeriod,
+    expectedBaseMinor,
+    periodBudgetMinor,
+    periodSpentMinor,
+    periodStartLocalDay: eff.startLocalDay,
+    configured: expectedBaseMinor > 0,
+  };
+}

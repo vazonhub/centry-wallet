@@ -36,6 +36,18 @@
 12. 🟡 **Git flow.** Завести ветки `develop` (дефолтная) / `testing` / `master`? Скажи — заведу и настрою branch protection (скрипт по образцу Bsuir). Либо на Build 0 работаем прямо в одной ветке — тоже вариант.
 13. 🟡 **Трекинг задач** — как в Bsuir через GitHub Issues, или достаточно `docs/BUILD0_PLAN.md`?
 
+## 2а. Нативка (этапы 7–8) — что нужно, чтобы собрать на устройстве
+
+Приложение запускается на симуляторе, вечерний пуш работает. Виджет (этап 7) и Siri (этап 8, переделан на deep-link канал 2026-08-24) ждут сборки на устройстве. Чтобы собрать:
+
+- 🔴 **Apple Team ID.** Нужен для подписи виджет-таргета (`@bacons/apple-targets`). Плоскость уже проведена: значение читается из `.env` (`APPLE_TEAM_ID=`) через `app.config.ts` — как `EXPO_OWNER`/`EAS_PROJECT_ID` (owner-specific, не коммитим в `app.json`). **Тебе нужно:** найти Team ID (10 символов, напр. `A1B2C3D4E5`) в Xcode (Settings → Accounts → твоя команда) или на developer.apple.com → Membership и вписать в `.env`.
+- 🟡 **Сборка:** заполнить `APPLE_TEAM_ID` в `.env` → `npm run prebuild` (регенерит `ios/` + виджет-таргет + `pod install`) → открыть `ios/Centry.xcworkspace` в Xcode → своё устройство → Run.
+  - **Виджет** добавляется на домашний экран стандартно (long-press → «+»).
+  - **Вечерний пуш:** при первом запуске приложение запросит разрешение на уведомления; напоминание придёт ежедневно во время из «Настройки → Ввод → Время напоминания» (по умолчанию 22:00), тап открывает шит ввода. Всё локально — сеть не трогается.
+- ⚠️ **Платный Apple Developer** почти наверняка нужен: App Groups + WidgetKit на бесплатном personal team обычно недоступны (см. п. 17).
+- ✅ **Сборочные блокеры виджета — решены (2026-08-21):** `import MMKVAppExtension` + `pod 'MMKVAppExtension', :modular_headers => true` (под — статичный Obj-C++ без modulemap; без modular headers Swift не видит модуль). Ошибки `no such module 'MMKV' / 'MMKVAppExtension'` устранены.
+- ✅ **Siri / App Intents — переделан на безопасный канал (2026-08-24).** Прошлая реализация линковала `MMKVAppExtension` вторым потребителем `MMKVCore` в main-таргет → порча кучи и краш. Теперь интенты открывают deep link `centry://add?kind=…&amount=…&note=…` через `OpenURLIntent` (iOS 17+), а JS парсит query и открывает шит — **никакого общего стора и второго `MMKVCore`, краш исключён**. Проверка на устройстве: «Hey Siri, добавить трату в Centry» → приложение открывает шит ввода, заполненный из фразы. Требуется iOS 17+; на iOS <17 фразы просто не регистрируются.
+
 ## 3. Локальная разработка (🔴 — чтобы запускать сборку)
 
 14. 🔴 **Mac + Xcode.** Подтверди, что есть Mac с Xcode (желательно 26.x для iOS 26 Liquid Glass) и версия.
@@ -52,7 +64,7 @@
 ## 5. К v1.0 (🟢 — сейчас не трогаем)
 
 21. 🟢 **Apple Developer Program** оформлен (если ещё нет по п.17).
-22. 🟢 **Резервация имени** «Centry: деньги и валюты» в App Store Connect (D17), получить `ascAppId`. → пошагово: [`docs/GUIDE_APPSTORE_NAME.md`](docs/GUIDE_APPSTORE_NAME.md).
+22. ✅ **Резервация имени — сделано (2026-08-20).** Имя = **`Centry`** (без дескриптора, B16). `ascAppId = 6803400593`, App Group `group.by.vazon.centry` привязан к `by.vazon.centry` и `by.vazon.centry.widget` (B17). `ascAppId` вписан в `eas.json`. → [`docs/GUIDE_APPSTORE_NAME.md`](docs/GUIDE_APPSTORE_NAME.md).
 23. 🟢 **EAS / Expo:** аккаунт, `eas init` → `EAS_PROJECT_ID` + `EXPO_OWNER`, секрет `EXPO_TOKEN` в GitHub Actions. После этого включаю EAS/release-пайплайн. → пошагово: [`docs/GUIDE_EAS_SETUP.md`](docs/GUIDE_EAS_SETUP.md).
 24. 🟢 **Приватность App Store** (nutrition label): т.к. данные не покидают телефон — «Data Not Collected». → пошагово + готовый текст политики: [`docs/GUIDE_PRIVACY.md`](docs/GUIDE_PRIVACY.md).
 

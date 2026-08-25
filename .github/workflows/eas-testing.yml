@@ -1,0 +1,64 @@
+name: EAS Testing Build
+
+# Push в testing → EAS build (iOS) + submit в TestFlight.
+# Centry — только iOS (Android вне скоупа), поэтому платформа зашита в ios.
+#
+# Требует секреты в GitHub (Settings → Secrets → Actions):
+#   EXPO_TOKEN, EAS_PROJECT_ID, EXPO_OWNER.
+# Пайплайн включается на v1.0 — до этого секретов нет и job упадёт (это ожидаемо).
+
+on:
+  push:
+    branches: [testing]
+  workflow_dispatch:
+
+concurrency:
+  group: eas-testing-${{ github.ref }}
+  cancel-in-progress: false
+
+# Least-privilege token: the build job only reads the repository.
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: EAS build & submit (iOS)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # --no-wait: билд и сабмит выполняются на серверах EAS, runner не ждёт.
+      - name: Start EAS build + submit
+        env:
+          HEAD_MESSAGE: ${{ github.event.head_commit.message || 'Manual testing build' }}
+          # app.config.ts injects extra.eas.projectId / owner from these — .env is not committed.
+          EAS_PROJECT_ID: ${{ secrets.EAS_PROJECT_ID }}
+          EXPO_OWNER: ${{ secrets.EXPO_OWNER }}
+          # Don't let EAS auto-patch Apple capabilities in CI: with API-key auth it
+          # can't sync App Group identifiers and fails the build. Capabilities are
+          # configured once by hand in the Apple Developer portal instead.
+          EXPO_NO_CAPABILITY_SYNC: '1'
+        run: |
+          MESSAGE=$(printf '%s' "$HEAD_MESSAGE" | head -1 | cut -c1-1024)
+          eas build \
+            --profile production \
+            --platform ios \
+            --auto-submit-with-profile testing \
+            --non-interactive \
+            --no-wait \
+            --message "$MESSAGE"

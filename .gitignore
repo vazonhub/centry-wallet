@@ -41,6 +41,9 @@ yarn-error.*
 .idea/
 .vscode/
 
+# Claude Code local settings (personal paths / email — never commit)
+.claude/settings.local.json
+
 # generated native folders
 /ios
 /android

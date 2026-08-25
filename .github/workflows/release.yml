@@ -1,0 +1,62 @@
+name: Release
+
+# Merge PR «Release vX.Y.Z» в master →
+#   1. git-тег vX.Y.Z (версия из package.json);
+#   2. GitHub Release: авто-changelog + ссылка на App Store.
+# В App Store CI ничего не сабмитит — релиз делается руками промоушеном
+# TestFlight-билда, загруженного на этапе testing. Android нет (вне скоупа),
+# поэтому здесь нет EAS-билда APK — только тег и GitHub Release.
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Tag & GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version
+        id: version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Create and push tag
+        id: tag
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::warning::Тег $TAG уже существует — релиз пропущен (push в master без бампа версии)."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            git tag "$TAG"
+            git push origin "$TAG"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        if: steps.tag.outputs.skip == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          body: |
+            ## Centry v${{ steps.version.outputs.version }}
+
+            | Платформа | Где взять |
+            | --- | --- |
+            | iOS | [App Store](https://apps.apple.com/app/id6803400593) |
+
+            ---

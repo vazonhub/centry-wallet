@@ -10,16 +10,16 @@
 
 ## Вольт проекта (docs/)
 
-| Документ | О чём |
-| --- | --- |
-| [PROJECT_BRIEF](docs/PROJECT_BRIEF.md) | канонический продукт: цель, пользователь, незыблемые правила, скоуп |
-| [ARCHITECTURE](docs/ARCHITECTURE.md) | иерархия папок, слои MVC+, идиомы из Bsuir, набор зависимостей |
-| [DATA_MODEL](docs/DATA_MODEL.md) | схема SQLite, миграции, ключи MMKV, снимок виджета, денежный модуль, тесты |
-| [DESIGN_SYSTEM](docs/DESIGN_SYSTEM.md) | Liquid Glass токены (светлая/тёмная), типографика, правила блюра |
-| [UX_SPEC](docs/UX_SPEC.md) | экраны, ядро ввода, онбординг, стартовые данные, пустые состояния |
-| [BUILD0_PLAN](docs/BUILD0_PLAN.md) | план из 9 этапов + критерии приёмки |
-| [CICD](docs/CICD.md) | gitflow, CI, EAS (off до v1.0), env-процесс, версионирование |
-| [DECISIONS](docs/DECISIONS.md) | реестр решений D1–D30 + B1–B15 (включая правки владельца от 2026-08-19) |
+| Документ                               | О чём                                                                      |
+| -------------------------------------- | -------------------------------------------------------------------------- |
+| [PROJECT_BRIEF](docs/PROJECT_BRIEF.md) | канонический продукт: цель, пользователь, незыблемые правила, скоуп        |
+| [ARCHITECTURE](docs/ARCHITECTURE.md)   | иерархия папок, слои MVC+, идиомы из Bsuir, набор зависимостей             |
+| [DATA_MODEL](docs/DATA_MODEL.md)       | схема SQLite, миграции, ключи MMKV, снимок виджета, денежный модуль, тесты |
+| [DESIGN_SYSTEM](docs/DESIGN_SYSTEM.md) | Liquid Glass токены (светлая/тёмная), типографика, правила блюра           |
+| [UX_SPEC](docs/UX_SPEC.md)             | экраны, ядро ввода, онбординг, стартовые данные, пустые состояния          |
+| [BUILD0_PLAN](docs/BUILD0_PLAN.md)     | план из 9 этапов + критерии приёмки                                        |
+| [CICD](docs/CICD.md)                   | gitflow, CI, EAS (off до v1.0), env-процесс, версионирование               |
+| [DECISIONS](docs/DECISIONS.md)         | реестр решений D1–D30 + B1–B17 (включая правки владельца от 2026-08-19/20) |
 
 Гайды владельца (ручные шаги вне кода): [GUIDE_APPSTORE_NAME](docs/GUIDE_APPSTORE_NAME.md) · [GUIDE_EAS_SETUP](docs/GUIDE_EAS_SETUP.md) · [GUIDE_PRIVACY](docs/GUIDE_PRIVACY.md). Что ждём от владельца — [WHAT_I_NEED_FROM_YOU](WHAT_I_NEED_FROM_YOU.md).
 
@@ -84,7 +84,43 @@ Pre-commit (husky + lint-staged) гоняет prettier + `eslint --fix` на sta
 
 ## Статус
 
-**Стадия: бутстрап.** Вольт написан, код-скелет ещё не создан. Следующий шаг — этап 1 плана ([BUILD0_PLAN](docs/BUILD0_PLAN.md)): каркас, SQLite, миграции, денежный модуль + тесты. Что нужно от владельца — [`WHAT_I_NEED_FROM_YOU.md`](WHAT_I_NEED_FROM_YOU.md).
+**Стадия: этапы 1–9 написаны (2026-08-21); приложение запускается на симуляторе, вечерний пуш работает, виджет ждёт девайса, Siri отключён (краш, см. этап 8).** 69 тестов зелёные, `npm run typecheck`/`lint` чисты, `expo prebuild --clean` + `pod install` проходят, EAS ad-hoc ставится (`ascAppId 6803400593`).
+
+> Сборочные блокеры виджета устранены (2026-08-21): `import MMKVAppExtension` + `pod 'MMKVAppExtension', :modular_headers => true` в `targets/widget/pods.rb` (под — статичный Obj-C++ без modulemap, без него Swift не видит модуль); `ios.appleTeamId` проведён через `.env` (`APPLE_TEAM_ID`) → `app.config.ts`.
+
+Этап 1: конфиги (Expo SDK 54, aliases, eslint/prettier/jest), `src/db` (SQLite + миграции + репозитории), `src/models`, денежный модуль `@utils/money` (BigInt, half-up away-from-zero), токены `@theme` (Liquid Glass; canvas light `#faf3e4` / dark `#000e49`, B20), `@storage` (MMKV), сид 8+3 категорий и счёта «Основной».
+
+Этап 2 (ядро ввода): сторы `settings`/`data`/`ui` (Zustand + MMKV), **единственный сетевой модуль** `src/services/rates/` (Fawaz, только коды валют, таймаут, оффлайн-фолбэк), контроллеры `data`/`transactions` (единые funnel'ы `addTransaction`/`addTransfer`/`createAccount`), шит ввода `@views/input`: расход/доход/**перевод** (B12, кросс-валютный с редактируемым итогом) + **создание счёта на лету** (D7). Bootstrap не блокируется сетью (иначе был белый экран).
+
+Этап 3 (главная): «можно сегодня» с порогами B9, **carry-over плашка** (B10), чипсы счетов, лента с **группировкой по дням** и итогом дня, **день зарплаты по тапу на цифру** (rule 3), FAB «+».
+
+Навигация: **нативный таб-бар из 3 вкладок** `История · Главная · Настройки` (Главная по центру/дефолтная, B19), «+» — плавающая кнопка на Главной. Каждая вкладка — свой Stack-layout.
+
+Этап 5 (История): переключение месяцев, итоги пришло/ушло/разница, живой поиск по заметке, фильтры (Все/Расходы/Доходы/по счетам), топ-5 «на что ушло» полосами (D19), лента на `@shopify/flash-list` с группировкой по дням, **шит деталей** (D20): курс/сумма в базе, смена категории и заметки, удаление.
+
+Этап 6 (Настройки): счета+балансы и добавление счёта, базовая валюта, день зарплаты, **переключение темы** (`resolvedScheme` в сторе, паттерн Bsuir — `usePalette` читает его, не `useColorScheme`), тумблеры ввода, «удалить все данные» (единственный hard-delete, `wipeAllData`+реseed), «о приложении».
+
+Этап 7 (виджеты): **код готов (2026-08-20), ждёт сборки на устройстве.** TS-снимок «можно сегодня» (`src/services/widget/`, единый расчёт `computeAllowance` — не дублируется в Swift) пишется в App-Group MMKV (`centry.widget`) после каждой мутации (хук в `DataController.loadAll`) + `reloadAllTimelines()`. Нативный таргет — через **`@bacons/apple-targets`** (не самописный плагин): `targets/widget/` (Swift S/M-виджеты, читают снимок из App-Group MMKV через `MMKVAppExtension`) + `expo-target.config.js` + `pods.rb`. Deep link `centry://add` → шит ввода. `expo prebuild` проверен: таргет `by.vazon.centry.widget` генерируется. Подпись таргета — через `APPLE_TEAM_ID` в `.env` (см. блок «Сборочные блокеры» выше).
+
+Этап 8 (Siri + вечерний пуш): **вечерний пуш готов и работает на симуляторе; Siri / App Intents переделан на безопасный канал (2026-08-24, ветка `feature/siri-app-intents`) — ждёт проверки на устройстве.** Пуш — единственный локальный (не сетевой) сервис `src/services/notifications/` (ежедневный `SchedulableTriggerInputTypes.DAILY` в `eveningPushTime`, идемпотентный `syncEveningReminder`, хук в `bootstrap` + тумблер/таймер в «Настройки → Ввод»), тап → `centry://add` → шит ввода (`useNotificationResponse`).
+
+> ✅ **Siri / App Intents — deep-link канал (2026-08-24, заменил MMKV-канал).** Причина прошлого краха: плагин линковал `MMKVAppExtension` вторым потребителем `MMKVCore` в main-таргет (`react-native-mmkv` уже линкует `MMKVCore`) → порча кучи на старте (`nanov2_guard_corruption_detected`). **Новый канал не использует общий стор вообще:** Swift-интенты (`AddExpenseIntent`/`AddIncomeIntent`, iOS 17+) открывают `centry://add?kind=…&amount=…&note=…` через `OpenURLIntent`; JS парсит query (`@utils/deepLink.parseAddDeepLink`) в существующем `useWidgetDeepLink` и открывает шит с prefill. Ничего лишнего не линкуется — краш исключён по построению. Плагин `plugins/withAppIntents/` теперь только инжектит Swift-сорсы (без пода MMKV, **не возвращать под!**), включён в `app.json`. Мёртвый MMKV-канал удалён (`src/services/intents/`, `usePendingIntent`, `INTENT_*` в `mmkv.ts`, `CentryIntentStore.swift`). Floor iOS 17 — из-за `OpenURLIntent` (владелец подтвердил 2026-08-24). JS-часть покрыта тестами (`deepLink.test.ts`); Swift/plugin проверяются только сборкой на устройстве.
+
+Этап 9 (полировка): пустые состояния подтверждены на всех экранах (лента Главной, список Истории, list-экраны настроек деградируют через «＋ Добавить»); убрана мёртвая строка «Синхронизация».
+
+**CSV-экспорт реализован (2026-08-24, ветка `feature/csv-export`):** «Настройки → Данные → Экспорт в CSV» собирает все не-удалённые транзакции в RFC-4180 CSV (BOM для кириллицы в Excel) и открывает системный шит шэринга. Слои: чистый `@utils/csv` (сериализация + сборка строк, юнит-тесты) → `@utils/money.formatMoneyPlain` (десятичная строка с точкой, форматирование денег по-прежнему только тут, правило 7) → `TransactionsRepo.listAllTransactions` → контроллер `export.controller` → сервис `src/services/export/` (запись в cache-dir через `expo-file-system` + `expo-sharing`). **Экспорт инициируется пользователем — правило 5 (ноль автоматической сети) не нарушается:** файл пишется локально, наружу уходит только если пользователь сам выберет получателя в шите. Новые нативные зависимости (`expo-file-system`, `expo-sharing`) требуют `npm run prebuild` + пересборки dev-client.
+
+**Настройки → Данные / О приложении переработаны (2026-08-24, ветка `feature/data-about-screens`):** Данные — секции «Экспорт» (CSV + пояснение) и «Данные» (**«Обновить виджет»** — принудительный `DataController.refreshWidget` → `refreshWidgetSnapshot`; «Удалить все данные»). О приложении — секция «Ссылки» (Telegram `t.me/multibelbet`, GitHub `vazonhub/centry-wallet` через `Linking.openURL` + Ionicons) и версия внизу. Экраны разбиты на секции с заголовками (паттерн Bsuir).
+
+**Локализация RU/EN реализована (2026-08-24, ветка `feature/i18n-ru-en`):** `i18next` + `react-i18next`, словари `src/i18n/{ru,en}.ts` (пропущенный ключ = ошибка сборки; `i18next.d.ts` типизирует `t('…')`). `applyLanguage` синхронит i18next + **формат денег** (`@utils/money.setMoneyLocale`: ru `1 234,56` / en `1,234.56`, целочисленная математика не меняется, правило 7) + **даты** (`@utils/date`: рус/англ месяцы и дни). Системные категории и счёт «Основной» локализуются по стабильному id/ключу (`@utils/displayName`) — переименованные пользователем сохраняют имя. CSV и снимок виджета получают локализованные метки инъекцией (билдеры остаются чистыми/тестируемыми). Экраны переведены через `useTranslation`; нативный таб-бар — тоже. **Siri двуязычный:** `CentryShortcuts` содержит RU+EN фразы (`CFBundleLocalizations = ["ru","en"]`).
+
+> **База — Английский (2026-08-25, ветка `feature/english-base-rate-privacy`).** Основная аудитория англоговорящая, поэтому **EN — источник истины ключей**: `en.ts` определяет `Translations = typeof en`, `ru.ts` типизирован как `Translations` (пропущенный русский ключ = ошибка сборки). Дефолты по всему коду теперь en: `getSystemLanguage` (RU-устройство→ru, иначе en), `fallbackLng`, `moneyLocale`, `dateLocale`. Хардкод-русский вычищен: `budget.periodLabel` удалён → `home.periodWeek/Month` через i18n; ошибка «единственный счёт» и fallback-имена валют (`@constants/currencies`) переведены. Ссылка на политику конфиденциальности добавлена в «О приложении» (`https://kostyabet.github.io/centry/privacy.html`, ключ `about.privacy`).
+
+**Ручной курс в переводах (2026-08-25, та же ветка):** кросс-валютный перевод показывает редактируемое поле «Курс» (`input.rate`) + «Итог». Логика в `@utils/money` (правило 7, всё BigInt): `crossRateE6` (курс from→to ×1e6 из двух сумм), `applyCrossRate` (сумма по курсу), `parseRateToE6`/`formatRate`/`sanitizeRateInput`. UI-состояние `transferOverride: {mode:'rate'|'final'} | null` в `InputSheet`: **правишь курс → итог пересчитывается** (`applyCrossRate`); **правишь итог → сохраняется как есть**, курс лишь отображается (реальный обмен в банке с комиссией может отличаться); `null` → рыночный курс. Юнит-тесты — `money.test.ts`.
+
+**Планы (в следующих версиях):** импорт CSV (обратно к экспорту).
+
+Осталось (владелец): **сборка на устройстве** — `APPLE_TEAM_ID` в `.env` → `npm run prebuild` → Xcode → Run; проверить виджет, вечерний пуш и **Siri** на девайсе (нужен, скорее всего, платный Apple Developer). Siri (iOS 18+, `OpenURLIntent`): «Hey Siri, добавить трату в Centry» / «Add expense to Centry» → шит ввода, заполненный из фразы. Что нужно от владельца — [`WHAT_I_NEED_FROM_YOU.md`](WHAT_I_NEED_FROM_YOU.md).
 
 ## Code style (как в Bsuir)
 

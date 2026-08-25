@@ -1,4 +1,4 @@
-import { SEED_CATEGORY_NAMES } from '@constants/categories';
+import { LEGACY_SEED_CATEGORY_NAMES, SEED_CATEGORY_NAMES } from '@constants/categories';
 import type { Account, Category } from '@models';
 import i18n from '@i18n';
 
@@ -45,13 +45,17 @@ const SEED_ACCOUNT_NAMES = new Set(['Основной', 'Main']);
 
 /**
  * Display name for a category. Localizes an UNTOUCHED system seed (stored name
- * still equals the original seed name); once the user renames it, the stored
- * name wins so the rename is visible.
+ * still equals the current OR the legacy Russian seed name — the latter covers
+ * installs seeded before the 2026-08-25 switch to English seeds); once the user
+ * renames it, the stored name wins so the rename is visible.
  */
 export function displayCategoryName(category: Pick<Category, 'id' | 'name' | 'isSystem'>): string {
   const key = category.isSystem ? CATEGORY_KEY[category.id] : undefined;
-  if (key && category.name === SEED_CATEGORY_NAMES[category.id]) return i18n.t(key);
-  return category.name;
+  const isUntouchedSeed =
+    key != null &&
+    (category.name === SEED_CATEGORY_NAMES[category.id] ||
+      category.name === LEGACY_SEED_CATEGORY_NAMES[category.id]);
+  return isUntouchedSeed ? i18n.t(key) : category.name;
 }
 
 /** Display name for an account — localizes the untouched default account seed. */

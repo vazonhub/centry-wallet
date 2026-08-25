@@ -28,11 +28,16 @@ import { displayAccountName, displayCategoryName } from '@utils/displayName';
 import { hapticLight, hapticSuccess } from '@utils/haptics';
 import {
   amountPlaceholder,
+  applyCrossRate,
   convertFromBase,
   convertToBase,
+  crossRateE6,
   formatMoney,
+  formatRate,
   parseAmountToMinor,
+  parseRateToE6,
   sanitizeAmountInput,
+  sanitizeRateInput,
 } from '@utils/money';
 
 const E6_ONE = 1_000_000;
@@ -69,7 +74,13 @@ export function InputSheet() {
   const [occurredAt, setOccurredAt] = useState<Date>(() => new Date());
   const [fromAccountId, setFromAccountId] = useState<string | null>(null);
   const [toAccountId, setToAccountId] = useState<string | null>(null);
-  const [amountTo, setAmountTo] = useState('');
+  // Cross-currency transfer override: the user either dictates the exchange RATE
+  // (result is recomputed from it) or the FINAL amount (kept verbatim — a real
+  // bank exchange with fees can differ). null = follow the market rate.
+  const [transferOverride, setTransferOverride] = useState<{
+    mode: 'rate' | 'final';
+    text: string;
+  } | null>(null);
 
   const [createTarget, setCreateTarget] = useState<CreateTarget | null>(null);
   const [newName, setNewName] = useState('');
@@ -106,7 +117,7 @@ export function InputSheet() {
     setAccountId(initial);
     setFromAccountId(initial);
     setToAccountId(accounts.find((a) => a.id !== initial)?.id ?? null);
-    setAmountTo('');
+    setTransferOverride(null);
     setCreateTarget(null);
   }, [lastAccountId, accounts]);
 
@@ -155,18 +166,52 @@ export function InputSheet() {
 
   const transfer = useMemo(() => {
     if (!fromAccount || !toAccount) return null;
-    const fromMinor = parseAmountToMinor(amount, fromAccount.currency);
+    const from = fromAccount.currency;
+    const to = toAccount.currency;
+    const fromMinor = parseAmountToMinor(amount, from);
     if (fromMinor == null || fromMinor <= 0) return null;
-    const sameCurrency = fromAccount.currency === toAccount.currency;
-    const suggestedTo = sameCurrency
+    const sameCurrency = from === to;
+
+    // The market result and the from→to rate it implies (defaults).
+    const marketToMinor = sameCurrency
       ? fromMinor
-      : convertFromBase(
-          convertToBase(fromMinor, rateOf(fromAccount.currency)),
-          rateOf(toAccount.currency),
-        );
-    const manualTo = amountTo.trim() ? parseAmountToMinor(amountTo, toAccount.currency) : null;
-    return { fromMinor, toMinor: manualTo ?? suggestedTo, suggestedTo, sameCurrency };
-  }, [fromAccount, toAccount, amount, amountTo, rateOf]);
+      : convertFromBase(convertToBase(fromMinor, rateOf(from)), rateOf(to));
+    const marketRateE6 = crossRateE6(fromMinor, from, marketToMinor, to) ?? E6_ONE;
+
+    if (sameCurrency) {
+      return { fromMinor, toMinor: fromMinor, sameCurrency, rateE6: E6_ONE, marketRateE6 };
+    }
+
+    // RATE override → recompute the result from the entered rate.
+    if (transferOverride?.mode === 'rate') {
+      const rateE6 = parseRateToE6(transferOverride.text) ?? marketRateE6;
+      return {
+        fromMinor,
+        toMinor: applyCrossRate(fromMinor, from, rateE6, to),
+        sameCurrency,
+        rateE6,
+        marketRateE6,
+      };
+    }
+
+    // FINAL override → keep the entered amount; the rate is derived from it.
+    if (transferOverride?.mode === 'final') {
+      const entered = transferOverride.text.trim()
+        ? parseAmountToMinor(transferOverride.text, to)
+        : null;
+      const toMinor = entered != null && entered > 0 ? entered : marketToMinor;
+      return {
+        fromMinor,
+        toMinor,
+        sameCurrency,
+        rateE6: crossRateE6(fromMinor, from, toMinor, to) ?? marketRateE6,
+        marketRateE6,
+      };
+    }
+
+    // Follow the market rate.
+    return { fromMinor, toMinor: marketToMinor, sameCurrency, rateE6: marketRateE6, marketRateE6 };
+  }, [fromAccount, toAccount, amount, transferOverride, rateOf]);
 
   const onSaveTransfer = useCallback(async () => {
     if (!fromAccount || !toAccount || !transfer) return;
@@ -183,7 +228,7 @@ export function InputSheet() {
     });
     hapticSuccess();
     setAmount('');
-    setAmountTo('');
+    setTransferOverride(null);
     setNote('');
     setOccurredAt(new Date());
     inputSheetRef.current?.dismiss();
@@ -352,6 +397,7 @@ export function InputSheet() {
                 const i = e.nativeEvent.selectedSegmentIndex;
                 setKind(i === 0 ? 'expense' : i === 1 ? 'income' : 'transfer');
                 setCategoryId(null);
+                setTransferOverride(null);
                 hapticLight();
               }}
             />
@@ -374,22 +420,58 @@ export function InputSheet() {
             {kind === 'transfer' ? (
               <>
                 <Text style={styles.label}>{t('input.fromAccount')}</Text>
-                {renderAccountChips(fromAccountId, setFromAccountId, 'from')}
+                {renderAccountChips(
+                  fromAccountId,
+                  (id) => {
+                    setFromAccountId(id);
+                    setTransferOverride(null);
+                  },
+                  'from',
+                )}
                 <Text style={styles.label}>{t('input.toAccount')}</Text>
-                {renderAccountChips(toAccountId, setToAccountId, 'to')}
-                {transfer && !transfer.sameCurrency && toAccount && (
+                {renderAccountChips(
+                  toAccountId,
+                  (id) => {
+                    setToAccountId(id);
+                    setTransferOverride(null);
+                  },
+                  'to',
+                )}
+                {transfer && !transfer.sameCurrency && fromAccount && toAccount && (
                   <>
+                    <Text style={styles.label}>{t('input.rate')}</Text>
+                    <View style={styles.amountRow}>
+                      <Text style={styles.rateHint}>1 {fromAccount.currency} =</Text>
+                      <BottomSheetTextInput
+                        style={styles.amountSmall}
+                        value={
+                          transferOverride?.mode === 'rate'
+                            ? transferOverride.text
+                            : formatRate(transfer.rateE6)
+                        }
+                        onChangeText={(v) =>
+                          setTransferOverride({ mode: 'rate', text: sanitizeRateInput(v) })
+                        }
+                        placeholder={formatRate(transfer.marketRateE6)}
+                        placeholderTextColor={palette.dim2}
+                        keyboardType="decimal-pad"
+                      />
+                      <Text style={styles.currency}>{toAccount.currency}</Text>
+                    </View>
                     <Text style={styles.label}>
                       {t('input.total', { currency: toAccount.currency })}
                     </Text>
                     <View style={styles.amountRow}>
                       <BottomSheetTextInput
                         style={styles.amountSmall}
-                        value={amountTo}
-                        onChangeText={(t) =>
-                          setAmountTo(sanitizeAmountInput(t, toAccount.currency))
+                        value={transferOverride?.mode === 'final' ? transferOverride.text : ''}
+                        onChangeText={(v) =>
+                          setTransferOverride({
+                            mode: 'final',
+                            text: sanitizeAmountInput(v, toAccount.currency),
+                          })
                         }
-                        placeholder={formatMoney(transfer.suggestedTo, toAccount.currency, {
+                        placeholder={formatMoney(transfer.toMinor, toAccount.currency, {
                           hideCode: true,
                         })}
                         placeholderTextColor={palette.dim2}

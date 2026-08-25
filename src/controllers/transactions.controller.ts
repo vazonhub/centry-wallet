@@ -110,7 +110,7 @@ async function updateAccount(id: Id, input: UpdateAccountInput): Promise<void> {
 async function deleteAccount(id: Id): Promise<void> {
   const active = await AccountsRepo.listAccounts(false);
   if (active.length <= 1) {
-    throw new Error('Нельзя удалить единственный счёт — сначала создайте другой.');
+    throw new Error('Cannot delete your only account — create another one first.');
   }
   const now = nowSec();
   const target = active.find((a) => a.id === id);

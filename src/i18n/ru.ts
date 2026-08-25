@@ -1,12 +1,11 @@
+import type { Translations } from './en';
+
 /**
- * Russian strings — the source of truth for the translation keys. `en.ts` is
- * typed as `Translations` (= typeof ru), so a missing English key is a compile
- * error, and `src/i18n/i18next.d.ts` types every `t('…')` against this shape.
- *
- * UI copy stays in these files. Money is still formatted only by `@utils/money`;
- * dates by `@utils/date`; seeded category/account names by `@utils/displayName`.
+ * Russian strings — layered on top of the English base. Typed as `Translations`
+ * (= typeof en) so a missing or misspelled Russian key is a compile error, and
+ * both languages stay in lock-step with `en.ts` (the source of truth).
  */
-export const ru = {
+export const ru: Translations = {
   common: {
     cancel: 'Отмена',
     delete: 'Удалить',
@@ -70,6 +69,7 @@ export const ru = {
   about: {
     title: 'О приложении',
     links: 'ССЫЛКИ',
+    privacy: 'Политика конфиденциальности',
     appInfo: 'О ПРИЛОЖЕНИИ',
     version: 'Версия',
     footnote:
@@ -113,6 +113,7 @@ export const ru = {
     transfer: 'Перевод',
     fromAccount: 'СО СЧЁТА',
     toAccount: 'НА СЧЁТ',
+    rate: 'КУРС',
     total: 'ИТОГ ({{currency}})',
     notePlaceholder: 'Заметка (необязательно)',
     date: 'ДАТА',
@@ -123,6 +124,8 @@ export const ru = {
       'На {{period}} по плану осталось потратить {{amount}} сверх того, что есть на счетах. Возможно, стоит уменьшить план бюджета или пополнить счёт.',
     totalA11y: 'Всего денег и график баланса',
     insufficientA11y: 'Денег может не хватить на план',
+    periodWeek: 'неделю',
+    periodMonth: 'месяц',
     spent: 'потрачено',
     setPlanShort: 'Задайте план →',
     allowanceLabel: 'МОЖНО СЕГОДНЯ',
@@ -287,5 +290,3 @@ export const ru = {
     transfers: 'Переводы',
   },
 };
-
-export type Translations = typeof ru;

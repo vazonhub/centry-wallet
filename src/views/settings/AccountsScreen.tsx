@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -10,8 +11,10 @@ import { usePalette } from '@hooks/usePalette';
 import { useDataStore } from '@stores/data.store';
 import type { Palette } from '@theme';
 import { Radius, Spacing, TAB_BAR_HEIGHT, Typography } from '@theme';
+import { displayAccountName } from '@utils/displayName';
 
 export function AccountsScreen() {
+  const { t } = useTranslation();
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const accounts = useDataStore((s) => s.accounts);
@@ -20,7 +23,7 @@ export function AccountsScreen() {
 
   return (
     <View style={styles.canvas}>
-      <ScreenHeader title="Счета" />
+      <ScreenHeader title={t('accounts.title')} />
       <ScrollView
         contentContainerStyle={[
           styles.body,
@@ -34,14 +37,14 @@ export function AccountsScreen() {
               <View style={styles.labelRow}>
                 <AppIcon name={a.icon} color={palette.dim} size={18} fallback="wallet-outline" />
                 <Text style={styles.label} numberOfLines={1}>
-                  {a.name} · {a.currency}
+                  {displayAccountName(a)} · {a.currency}
                 </Text>
               </View>
               <Money minor={balances[a.id] ?? 0} currency={a.currency} style={styles.value} />
             </Pressable>
           ))}
           <Pressable onPress={() => openAccountSheet()} style={styles.row}>
-            <Text style={styles.action}>＋ Добавить счёт</Text>
+            <Text style={styles.action}>＋ {t('accounts.addAccount')}</Text>
           </Pressable>
         </View>
       </ScrollView>

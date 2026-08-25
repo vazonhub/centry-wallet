@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 import { useFocusEffect } from 'expo-router';
 import { FlashList } from '@shopify/flash-list';
 
@@ -28,6 +29,7 @@ import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
 import { numberTextStyle, Radius, Spacing, TAB_BAR_HEIGHT, textProps, Typography } from '@theme';
 import { hexToRgba } from '@utils/color';
+import { displayAccountName, displayCategoryName } from '@utils/displayName';
 import { monthPrefix, todayLocalDay } from '@utils/date';
 import { hapticLight } from '@utils/haptics';
 import { convertToBase } from '@utils/money';
@@ -44,26 +46,17 @@ type Row = { type: 'header'; day: string; net: number } | { type: 'tx'; tx: Tran
  */
 const COLLAPSE_MIN_SCROLL = 160;
 
-/** Short month labels for the month/year picker grid. */
-const MONTHS_SHORT = [
-  'Янв',
-  'Фев',
-  'Мар',
-  'Апр',
-  'Май',
-  'Июн',
-  'Июл',
-  'Авг',
-  'Сен',
-  'Окт',
-  'Ноя',
-  'Дек',
-];
-
 export function HistoryScreen() {
+  const { t } = useTranslation();
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const insets = useSafeAreaInsets();
+
+  // Short month labels for the month/year picker grid.
+  const monthsShort = useMemo(
+    () => t('history.monthsShort', { returnObjects: true }) as string[],
+    [t],
+  );
 
   const month = useHistoryStore((s) => s.month);
   const setMonth = useHistoryStore((s) => s.setMonth);
@@ -113,7 +106,12 @@ export function HistoryScreen() {
         query.trim() &&
         !matchesSearch(query, {
           note: t.note ?? '',
-          category: t.categoryId ? (categoryById[t.categoryId]?.name ?? '') : '',
+          category: t.categoryId
+            ? (() => {
+                const c = categoryById[t.categoryId];
+                return c ? displayCategoryName(c) : '';
+              })()
+            : '',
           amountMinor: t.amountMinor,
         })
       )
@@ -228,7 +226,7 @@ export function HistoryScreen() {
           onPress={openPicker}
           style={styles.monthTitleBtn}
           accessibilityRole="button"
-          accessibilityLabel="Выбрать месяц и год"
+          accessibilityLabel={t('history.pickMonthYear')}
         >
           <Text {...textProps('title')} style={styles.monthTitle}>
             {formatMonth(month)}
@@ -252,7 +250,7 @@ export function HistoryScreen() {
       <View style={styles.totals}>
         <View style={styles.totalCard}>
           <Text {...textProps('caption')} style={styles.totalLabel}>
-            Пришло
+            {t('history.income')}
           </Text>
           <Money
             minor={income}
@@ -265,7 +263,7 @@ export function HistoryScreen() {
         </View>
         <View style={styles.totalCard}>
           <Text {...textProps('caption')} style={styles.totalLabel}>
-            Ушло
+            {t('history.outcome')}
           </Text>
           <Money
             minor={outcome}
@@ -278,7 +276,7 @@ export function HistoryScreen() {
         </View>
         <View style={styles.totalCard}>
           <Text {...textProps('caption')} style={styles.totalLabel}>
-            Разница
+            {t('history.difference')}
           </Text>
           <Money
             minor={income - outcome}
@@ -295,7 +293,7 @@ export function HistoryScreen() {
       {outcome > 0 && catSegments.length > 0 && (
         <Animated.View layout={LinearTransition.duration(240)} style={styles.topBlock}>
           <Text {...textProps('micro')} style={styles.sectionTitle}>
-            КАТЕГОРИИ ТРАТ
+            {t('history.spendCategories')}
           </Text>
           {collapsed ? (
             <Animated.View
@@ -350,7 +348,7 @@ export function HistoryScreen() {
       <TextInput
         value={query}
         onChangeText={setQuery}
-        placeholder="Поиск: заметка, категория, сумма"
+        placeholder={t('history.searchPlaceholder')}
         placeholderTextColor={palette.dim2}
         style={styles.search}
       />
@@ -363,10 +361,10 @@ export function HistoryScreen() {
       >
         {(
           [
-            { id: 'all', label: 'Все' },
-            { id: 'expense', label: 'Расходы' },
-            { id: 'income', label: 'Доходы' },
-            ...accounts.map((a) => ({ id: a.id, label: a.name })),
+            { id: 'all', label: t('history.filterAll') },
+            { id: 'expense', label: t('history.filterExpense') },
+            { id: 'income', label: t('history.filterIncome') },
+            ...accounts.map((a) => ({ id: a.id, label: displayAccountName(a) })),
           ] as { id: Filter; label: string }[]
         ).map((f) => {
           const active = filter === f.id;
@@ -386,7 +384,7 @@ export function HistoryScreen() {
       </ScrollView>
 
       <Text {...textProps('micro')} style={styles.sectionTitle}>
-        ЗАПИСИ
+        {t('history.records')}
       </Text>
     </View>
   );
@@ -424,7 +422,7 @@ export function HistoryScreen() {
             </Pressable>
           </View>
           <View style={styles.pickerGrid}>
-            {MONTHS_SHORT.map((label, i) => {
+            {monthsShort.map((label, i) => {
               const value = `${pickerYear}-${String(i + 1).padStart(2, '0')}`;
               const enabled = value >= minMonth && value <= currentMonth;
               const selected = value === month;
@@ -476,7 +474,7 @@ export function HistoryScreen() {
             ListHeaderComponent={Header}
             ListEmptyComponent={
               <Text {...textProps('footnote')} style={styles.empty}>
-                В этом месяце записей нет.
+                {t('history.emptyMonth')}
               </Text>
             }
             keyExtractor={(row) => (row.type === 'header' ? `h:${row.day}` : `t:${row.tx.id}`)}
@@ -501,19 +499,21 @@ export function HistoryScreen() {
                   </View>
                 );
               }
-              const t = item.tx;
-              const cat = t.categoryId ? categoryById[t.categoryId] : undefined;
-              const isTransfer = t.kind === 'transfer';
+              const tx = item.tx;
+              const cat = tx.categoryId ? categoryById[tx.categoryId] : undefined;
+              const isTransfer = tx.kind === 'transfer';
               const accent = isTransfer ? palette.dim : (cat?.color ?? palette.ink);
               const iconName = isTransfer
                 ? TRANSFER_ICON
                 : (cat?.icon ??
-                  (t.amountMinor >= 0 ? INCOME_FALLBACK_ICON : EXPENSE_FALLBACK_ICON));
-              const title = isTransfer ? 'Перевод' : t.note || cat?.name || 'Без категории';
+                  (tx.amountMinor >= 0 ? INCOME_FALLBACK_ICON : EXPENSE_FALLBACK_ICON));
+              const title = isTransfer
+                ? t('history.transfer')
+                : tx.note || (cat && displayCategoryName(cat)) || t('history.noCategory');
               return (
                 <Pressable
                   style={[styles.row, { backgroundColor: hexToRgba(accent, 0.14) }]}
-                  onPress={() => onRowPress(t)}
+                  onPress={() => onRowPress(tx)}
                 >
                   <View style={[styles.rowIconWrap, { backgroundColor: hexToRgba(accent, 0.2) }]}>
                     <AppIcon name={iconName} color={accent} size={18} />
@@ -522,12 +522,12 @@ export function HistoryScreen() {
                     {title}
                   </Text>
                   <Money
-                    minor={t.amountMinor}
-                    currency={t.currency}
+                    minor={tx.amountMinor}
+                    currency={tx.currency}
                     options={{ showPlus: !isTransfer }}
                     style={[
                       styles.rowAmount,
-                      { color: t.amountMinor >= 0 && !isTransfer ? palette.pos : palette.ink },
+                      { color: tx.amountMinor >= 0 && !isTransfer ? palette.pos : palette.ink },
                     ]}
                   />
                 </Pressable>

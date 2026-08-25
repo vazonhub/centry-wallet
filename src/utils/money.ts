@@ -149,6 +149,28 @@ export function getMinorUnits(currency: string): number {
   return MINOR_UNITS[currency.toUpperCase()] ?? 2;
 }
 
+// --- Locale-aware separators (rule 7: money formatting only lives here) -------
+// The integer math never changes; only the grouping/decimal characters do. The
+// active locale is set once from the language setting (src/i18n) so every money
+// surface reads the same style without threading a locale through every call.
+
+export type MoneyLocale = 'ru' | 'en';
+
+const SEPARATORS: Record<MoneyLocale, { decimal: string; group: string }> = {
+  ru: { decimal: ',', group: ' ' }, // "1 234,56"
+  en: { decimal: '.', group: ',' }, // "1,234.56"
+};
+
+let moneyLocale: MoneyLocale = 'en';
+
+/** Switches the money formatting style. Called from the i18n language wiring. */
+export function setMoneyLocale(locale: MoneyLocale): void {
+  moneyLocale = locale;
+}
+
+const decimalSep = (): string => SEPARATORS[moneyLocale].decimal;
+const groupSep = (): string => SEPARATORS[moneyLocale].group;
+
 /**
  * Parses a user-typed amount (major units, e.g. "12,50" or "12.5") into integer
  * minor units for the given currency. Accepts comma or dot as the decimal
@@ -214,7 +236,106 @@ export function minorToAmountInput(minor: number, currency: string): string {
 /** Placeholder for an amount field, e.g. "0,00" (integer + fraction shape). */
 export function amountPlaceholder(currency: string): string {
   const units = getMinorUnits(currency);
-  return units > 0 ? `0,${'0'.repeat(units)}` : '0';
+  return units > 0 ? `0${decimalSep()}${'0'.repeat(units)}` : '0';
+}
+
+// --- Cross-currency manual rate (transfers) --------------------------------
+// A transfer between two currencies has three linked values: the source amount,
+// the exchange rate (major TO units per one major FROM unit) and the resulting
+// amount. Rate is scaled ×1e6 (like rate_to_base_e6) so the whole chain stays
+// integer — no float ever touches money. Editing the rate recomputes the result
+// ({@link applyCrossRate}); editing the result leaves it as-is and the rate is
+// derived from it ({@link crossRateE6}) — a real bank exchange (with fees) can
+// land on a different amount than the pure rate would give.
+
+const RATE_INPUT_DECIMALS = 6; // matches RATE_SCALE = 1e6
+
+/**
+ * The from→to exchange rate (×1e6) implied by a source and result amount, i.e.
+ * how many major TO units one major FROM unit buys. Returns null if the source
+ * is non-positive (no meaningful rate).
+ *
+ * rate_e6 = round(to_minor × 10^fromDec × 1e6 / (from_minor × 10^toDec))
+ */
+export function crossRateE6(
+  fromMinor: number,
+  fromCurrency: string,
+  toMinor: number,
+  toCurrency: string,
+): number | null {
+  if (fromMinor <= 0) return null;
+  const fromScale = 10n ** BigInt(getMinorUnits(fromCurrency));
+  const toScale = 10n ** BigInt(getMinorUnits(toCurrency));
+  const numerator = BigInt(toMinor) * fromScale * RATE_SCALE;
+  const denominator = BigInt(fromMinor) * toScale;
+  return Number(divRoundHalfAwayFromZero(numerator, denominator));
+}
+
+/**
+ * Applies a from→to rate (×1e6) to a source amount, yielding the result in the
+ * target currency's minor units, rounding half away from zero.
+ *
+ * to_minor = round(from_minor × rate_e6 × 10^toDec / (10^fromDec × 1e6))
+ */
+export function applyCrossRate(
+  fromMinor: number,
+  fromCurrency: string,
+  rateE6: number,
+  toCurrency: string,
+): number {
+  const fromScale = 10n ** BigInt(getMinorUnits(fromCurrency));
+  const toScale = 10n ** BigInt(getMinorUnits(toCurrency));
+  const numerator = BigInt(fromMinor) * BigInt(rateE6) * toScale;
+  const denominator = fromScale * RATE_SCALE;
+  return Number(divRoundHalfAwayFromZero(numerator, denominator));
+}
+
+/**
+ * Parses a user-typed rate ("2,5", "0.006667") into a ×1e6 integer. Accepts a
+ * comma or dot separator, truncates beyond 6 decimals. Returns null for
+ * empty/invalid/non-positive input.
+ */
+export function parseRateToE6(input: string): number | null {
+  const cleaned = input.trim().replace(/\s/g, '').replace(',', '.');
+  if (cleaned === '' || cleaned === '.') return null;
+  if (!/^\d*\.?\d*$/.test(cleaned)) return null;
+  const [intRaw, fracRaw = ''] = cleaned.split('.');
+  const intPart = intRaw === '' ? '0' : intRaw;
+  const frac = (fracRaw + '0'.repeat(RATE_INPUT_DECIMALS)).slice(0, RATE_INPUT_DECIMALS);
+  const value = Number(intPart + frac);
+  if (!Number.isSafeInteger(value) || value <= 0) return null;
+  return value;
+}
+
+/**
+ * Renders a ×1e6 rate as an editable decimal string with the locale separator,
+ * trimming trailing zeros (2_500_000 → "2,5", 6_667 → "0,006667", 150_000_000 →
+ * "150"). Empty for a non-positive rate.
+ */
+export function formatRate(rateE6: number): string {
+  if (rateE6 <= 0) return '';
+  const intPart = Math.trunc(rateE6 / 1_000_000);
+  const frac = String(rateE6 % 1_000_000)
+    .padStart(RATE_INPUT_DECIMALS, '0')
+    .replace(/0+$/, '');
+  return frac ? `${intPart}${decimalSep()}${frac}` : `${intPart}`;
+}
+
+/**
+ * Sanitizes live rate-field text: digits and a single decimal separator, up to
+ * 6 fractional digits (feeds a controlled TextInput).
+ */
+export function sanitizeRateInput(input: string): string {
+  const s = input.replace(/[^\d.,]/g, '');
+  const sepIndex = s.search(/[.,]/);
+  if (sepIndex === -1) return s;
+  const sep = s[sepIndex] ?? '.';
+  const intPart = s.slice(0, sepIndex).replace(/[.,]/g, '');
+  const frac = s
+    .slice(sepIndex + 1)
+    .replace(/[.,]/g, '')
+    .slice(0, RATE_INPUT_DECIMALS);
+  return intPart + sep + frac;
 }
 
 export interface FormatMoneyOptions {
@@ -245,7 +366,7 @@ export function formatMoney(
   const fracPart = absMinor % divisor;
 
   const grouped = groupThousands(intPart.toString());
-  const fraction = units > 0 ? ',' + fracPart.toString().padStart(units, '0') : '';
+  const fraction = units > 0 ? decimalSep() + fracPart.toString().padStart(units, '0') : '';
 
   let sign = '';
   if (!opts.signless) {
@@ -257,9 +378,26 @@ export function formatMoney(
   return `${sign}${grouped}${fraction}${code}`;
 }
 
-/** Inserts a thin space every three digits from the right. */
+/**
+ * Renders minor units as a plain, ungrouped decimal string with a dot separator
+ * and a leading '-' for negatives, e.g. 123456 USD → "1234.56", -50 JPY → "-50",
+ * 0 USD → "0.00". Unlike {@link formatMoney} there is no grouping, no currency
+ * code and no thin spaces — the shape a spreadsheet parses as a number. Used by
+ * the CSV export (still the only money formatter, rule 7).
+ */
+export function formatMoneyPlain(minor: number, currency: string): string {
+  const units = getMinorUnits(currency);
+  const divisor = 10n ** BigInt(units);
+  const negative = minor < 0;
+  const absMinor = BigInt(negative ? -minor : minor);
+  const intPart = absMinor / divisor;
+  const fraction = units > 0 ? '.' + (absMinor % divisor).toString().padStart(units, '0') : '';
+  return `${negative ? '-' : ''}${intPart.toString()}${fraction}`;
+}
+
+/** Inserts the locale's group separator every three digits from the right. */
 function groupThousands(digits: string): string {
-  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, groupSep());
 }
 
 /** Suffix scales for the compact formatter, largest first. */
@@ -306,7 +444,7 @@ export function formatMoneyCompact(
 
   const whole = intMajor / scale;
   const tenth = ((intMajor % scale) * 10n) / scale; // 0..9, truncated toward zero
-  const numberStr = tenth > 0n ? `${whole},${tenth}` : `${whole}`;
+  const numberStr = tenth > 0n ? `${whole}${decimalSep()}${tenth}` : `${whole}`;
 
   let sign = '';
   if (!opts.signless) {

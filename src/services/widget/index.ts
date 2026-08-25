@@ -1,9 +1,11 @@
 import { reloadAllTimelines } from 'expo-widgetkit-bridge';
 
+import i18n from '@i18n';
 import { useDataStore } from '@stores/data.store';
 import { useSettingsStore } from '@stores/settings.store';
 import { WIDGET_SNAPSHOT_KEY, widgetStorage } from '@storage/mmkv';
 import { todayLocalDay } from '@utils/date';
+import { displayAccountName, displayCategoryName } from '@utils/displayName';
 
 import { buildWidgetSnapshot } from './snapshot';
 
@@ -36,6 +38,14 @@ export function refreshWidgetSnapshot(): void {
       plan: settings.budgetPlan,
       todayLocalDay: todayLocalDay(),
       now: new Date(),
+      periodLabel:
+        settings.budgetPlan.period === 'month'
+          ? i18n.t('widget.periodMonth')
+          : i18n.t('widget.periodWeek'),
+      transferLabel: i18n.t('widget.transfer'),
+      noCategoryLabel: i18n.t('widget.noCategory'),
+      resolveAccountName: displayAccountName,
+      resolveCategoryName: displayCategoryName,
     });
 
     widgetStorage.set(WIDGET_SNAPSHOT_KEY, JSON.stringify(snapshot));

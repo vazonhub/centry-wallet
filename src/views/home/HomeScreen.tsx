@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
+import { useTranslation } from 'react-i18next';
 
 import { AppIcon } from '@components/AppIcon';
 import { openAccountSheet } from '@components/accountSheetRef';
@@ -27,10 +28,10 @@ import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
 import { numberTextStyle, Radius, Spacing, textProps, Typography } from '@theme';
 import { formatTodayCompact, todayLocalDay } from '@utils/date';
+import { displayAccountName, displayCategoryName } from '@utils/displayName';
 import { hexToRgba } from '@utils/color';
 import { hapticLight } from '@utils/haptics';
 import { convertToBase, formatMoney, formatMoneyCompact } from '@utils/money';
-import { periodLabel } from '@utils/budget';
 import { computeAllowance, totalBalanceBaseMinor } from '@utils/summary';
 
 /** Shared font size for the top-row date and wallet-total cards (same type). */
@@ -66,6 +67,7 @@ function dayNetBaseMinor(txs: Transaction[]): number {
  * account blocks and a day-grouped feed of cards. "+" opens the input sheet.
  */
 export function HomeScreen() {
+  const { t } = useTranslation();
   const palette = usePalette();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(palette), [palette]);
@@ -153,13 +155,14 @@ export function HomeScreen() {
   const onWarningPress = useCallback(() => {
     hapticLight();
     Alert.alert(
-      'Денег может не хватить',
-      `На ${periodLabel(budgetPlan.period)} по плану осталось потратить ` +
-        `${formatMoney(Math.max(0, shortfallMinor), base)} сверх того, что есть на счетах. ` +
-        'Возможно, стоит уменьшить план бюджета или пополнить счёт.',
-      [{ text: 'Понятно' }],
+      t('home.insufficientTitle'),
+      t('home.insufficientBody', {
+        period: t(budgetPlan.period === 'week' ? 'home.periodWeek' : 'home.periodMonth'),
+        amount: formatMoney(Math.max(0, shortfallMinor), base),
+      }),
+      [{ text: t('common.ok') }],
     );
-  }, [budgetPlan.period, shortfallMinor, base]);
+  }, [budgetPlan.period, shortfallMinor, base, t]);
 
   const days = useMemo(() => {
     const map = new Map<string, Transaction[]>();
@@ -208,7 +211,7 @@ export function HomeScreen() {
                 openWalletTotal();
               }}
               accessibilityRole="button"
-              accessibilityLabel="Всего денег и график баланса"
+              accessibilityLabel={t('home.totalA11y')}
             >
               <AppIcon name="stats-chart" color={palette.dim} size={16} />
               <Money
@@ -256,7 +259,7 @@ export function HomeScreen() {
                         onPress={onWarningPress}
                         hitSlop={10}
                         accessibilityRole="button"
-                        accessibilityLabel="Денег может не хватить на план"
+                        accessibilityLabel={t('home.insufficientA11y')}
                       >
                         <AppIcon name="warning" color={palette.warn} size={16} />
                       </Pressable>
@@ -270,11 +273,12 @@ export function HomeScreen() {
                       adjustsFontSizeToFit
                       minimumFontScale={0.8}
                     >
-                      потрачено {formatMoneyCompact(todaySpent, base, { hideCode: true })} {base}
+                      {t('home.spent')} {formatMoneyCompact(todaySpent, base, { hideCode: true })}{' '}
+                      {base}
                     </Text>
                   ) : (
                     <Text {...textProps('footnote')} style={styles.heroSpent}>
-                      Задайте план →
+                      {t('home.setPlanShort')}
                     </Text>
                   )}
                 </Animated.View>
@@ -286,14 +290,14 @@ export function HomeScreen() {
                 >
                   <View style={styles.heroLabelRow}>
                     <Text {...textProps('micro')} style={styles.heroLabel}>
-                      МОЖНО СЕГОДНЯ
+                      {t('home.allowanceLabel')}
                     </Text>
                     {insufficientFunds && (
                       <Pressable
                         onPress={onWarningPress}
                         hitSlop={10}
                         accessibilityRole="button"
-                        accessibilityLabel="Денег может не хватить на план"
+                        accessibilityLabel={t('home.insufficientA11y')}
                       >
                         <AppIcon name="warning" color={palette.warn} size={16} />
                       </Pressable>
@@ -322,11 +326,12 @@ export function HomeScreen() {
                         adjustsFontSizeToFit
                         minimumFontScale={0.8}
                       >
-                        потрачено {formatMoneyCompact(todaySpent, base, { hideCode: true })} {base}
+                        {t('home.spent')} {formatMoneyCompact(todaySpent, base, { hideCode: true })}{' '}
+                        {base}
                       </Text>
                     ) : (
                       <Text {...textProps('footnote')} style={styles.heroSpent}>
-                        Задайте план бюджета →
+                        {t('home.setPlan')}
                       </Text>
                     )}
                     {configured && carry !== 0 && (
@@ -352,7 +357,7 @@ export function HomeScreen() {
                             { color: carry > 0 ? palette.pos : palette.neg },
                           ]}
                         >
-                          запас
+                          {t('home.carry')}
                         </Text>
                       </View>
                     )}
@@ -402,7 +407,7 @@ export function HomeScreen() {
                         fallback="wallet-outline"
                       />
                       <Text {...textProps('caption')} style={styles.accountName} numberOfLines={1}>
-                        {a.name}
+                        {displayAccountName(a)}
                       </Text>
                     </View>
                     <Money
@@ -419,7 +424,7 @@ export function HomeScreen() {
               style={styles.addChip}
               onPress={() => openAccountSheet()}
             >
-              <Text style={styles.addChipText}>＋ Счёт</Text>
+              <Text style={styles.addChipText}>{t('home.addAccount')}</Text>
             </AnimatedPressable>
           </ScrollView>
         </Animated.View>
@@ -446,7 +451,7 @@ export function HomeScreen() {
           >
             {recent.length === 0 ? (
               <Text {...textProps('footnote')} style={styles.empty}>
-                Пока пусто. Нажмите + и запишите первую трату.
+                {t('home.empty')}
               </Text>
             ) : (
               days.map(([day, txs]) => (
@@ -462,19 +467,21 @@ export function HomeScreen() {
                       style={styles.dayTotal}
                     />
                   </View>
-                  {txs.map((t) => {
-                    const cat = t.categoryId ? categoryById[t.categoryId] : undefined;
-                    const isTransfer = t.kind === 'transfer';
+                  {txs.map((tx) => {
+                    const cat = tx.categoryId ? categoryById[tx.categoryId] : undefined;
+                    const isTransfer = tx.kind === 'transfer';
                     const accent = isTransfer ? palette.dim : (cat?.color ?? palette.ink);
                     const iconName = isTransfer
                       ? TRANSFER_ICON
                       : (cat?.icon ??
-                        (t.amountMinor >= 0 ? INCOME_FALLBACK_ICON : EXPENSE_FALLBACK_ICON));
-                    const title = isTransfer ? 'Перевод' : t.note || cat?.name || 'Без категории';
+                        (tx.amountMinor >= 0 ? INCOME_FALLBACK_ICON : EXPENSE_FALLBACK_ICON));
+                    const title = isTransfer
+                      ? t('home.transfer')
+                      : tx.note || (cat && displayCategoryName(cat)) || t('home.noCategory');
                     return (
                       <Pressable
-                        key={t.id}
-                        onPress={() => openTransactionDetail(t)}
+                        key={tx.id}
+                        onPress={() => openTransactionDetail(tx)}
                         style={[styles.txRow, { backgroundColor: hexToRgba(accent, 0.14) }]}
                       >
                         <View
@@ -486,13 +493,13 @@ export function HomeScreen() {
                           {title}
                         </Text>
                         <Money
-                          minor={t.amountMinor}
-                          currency={t.currency}
+                          minor={tx.amountMinor}
+                          currency={tx.currency}
                           options={{ showPlus: !isTransfer }}
                           style={[
                             styles.rowAmount,
                             {
-                              color: t.amountMinor >= 0 && !isTransfer ? palette.pos : palette.ink,
+                              color: tx.amountMinor >= 0 && !isTransfer ? palette.pos : palette.ink,
                             },
                           ]}
                         />
@@ -514,7 +521,7 @@ export function HomeScreen() {
           openInputSheet();
         }}
         accessibilityRole="button"
-        accessibilityLabel="Добавить запись"
+        accessibilityLabel={t('home.addEntryA11y')}
       >
         <Text style={styles.fabPlus}>+</Text>
       </Pressable>

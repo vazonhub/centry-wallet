@@ -1,10 +1,4 @@
-import {
-  daysInclusive,
-  defaultBudgetPlan,
-  effectivePeriod,
-  periodBounds,
-  periodLabel,
-} from '../budget';
+import { daysInclusive, defaultBudgetPlan, effectivePeriod, periodBounds } from '../budget';
 
 describe('periodBounds — calendar week / month', () => {
   it('a Thursday sits mid-week with a Monday start', () => {
@@ -93,13 +87,8 @@ describe('effectivePeriod — narrow to what the user tracks', () => {
   });
 });
 
-describe('defaultBudgetPlan / periodLabel', () => {
+describe('defaultBudgetPlan', () => {
   it('defaults to an unset monthly plan in the base currency', () => {
     expect(defaultBudgetPlan('USD')).toEqual({ period: 'month', amountMinor: 0, currency: 'USD' });
-  });
-
-  it('labels periods in Russian accusative', () => {
-    expect(periodLabel('week')).toBe('неделю');
-    expect(periodLabel('month')).toBe('месяц');
   });
 });

@@ -9,9 +9,10 @@ import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initialWindowMetrics, SafeAreaProvider } from 'react-native-safe-area-context';
 
+import '@i18n';
+
 import { useAppBootstrap } from '@hooks/useAppBootstrap';
 import { useNotificationResponse } from '@hooks/useNotificationResponse';
-import { usePendingIntent } from '@hooks/usePendingIntent';
 import { useIsDark, usePalette } from '@hooks/usePalette';
 import { useWidgetDeepLink } from '@hooks/useWidgetDeepLink';
 import { AccountSheet } from '@components/AccountSheet';
@@ -42,7 +43,6 @@ export default function RootLayout() {
   const { ready } = useAppBootstrap();
   useWidgetDeepLink();
   useNotificationResponse();
-  usePendingIntent();
   const isDark = useIsDark();
   const palette = usePalette();
 

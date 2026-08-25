@@ -14,9 +14,10 @@ export const inputSheetRef = createRef<BottomSheetModal>();
 
 /**
  * Optional prefill applied the next time the sheet opens — the bridge for the
- * Siri App Intent (etap 8): "добавь трату 12 еда" opens the app and hands the
- * parsed amount/note to the sheet. `amount` is the raw text for the amount
- * field (formatted in the selected account's currency at input time).
+ * Siri App Intent (etap 8): "добавь трату 12 еда" opens `centry://add?kind=…&
+ * amount=…&note=…`, which `useWidgetDeepLink` parses into this prefill. `amount`
+ * is the raw text for the amount field (formatted in the selected account's
+ * currency at input time).
  */
 export interface InputPrefill {
   kind?: TransactionKind;

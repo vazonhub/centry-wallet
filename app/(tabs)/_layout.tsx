@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
+import { useTranslation } from 'react-i18next';
 
 import { useIsDark, usePalette } from '@hooks/usePalette';
 
@@ -26,6 +27,7 @@ const supportsLiquidGlass = iosVersion >= 26;
 export default function TabsLayout() {
   const palette = usePalette();
   const isDark = useIsDark();
+  const { t } = useTranslation();
 
   return (
     <NativeTabs
@@ -40,15 +42,15 @@ export default function TabsLayout() {
     >
       <NativeTabs.Trigger name="(home)">
         <Icon sf="house.fill" />
-        <Label>Главная</Label>
+        <Label>{t('tabs.home')}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(history)">
         <Icon sf="clock.arrow.circlepath" />
-        <Label>История</Label>
+        <Label>{t('tabs.history')}</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="(settings)">
         <Icon sf="gearshape.fill" />
-        <Label>Настройки</Label>
+        <Label>{t('tabs.settings')}</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   BottomSheetBackdrop,
@@ -17,6 +18,7 @@ import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
 import { numberTextStyle, Radius, Spacing, Typography } from '@theme';
 import type { BalancePoint } from '@utils/balanceHistory';
+import { displayAccountName } from '@utils/displayName';
 import { convertToBase } from '@utils/money';
 import { totalBalanceBaseMinor } from '@utils/summary';
 
@@ -30,6 +32,7 @@ const CHART_HEIGHT = 120;
  * from the Home total block. Read-only.
  */
 export function WalletTotalSheet() {
+  const { t } = useTranslation();
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
 
@@ -102,7 +105,7 @@ export function WalletTotalSheet() {
       onChange={onChange}
     >
       <BottomSheetScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.label}>ВСЕГО ДЕНЕГ</Text>
+        <Text style={styles.label}>{t('walletTotal.totalMoney')}</Text>
         <Money
           minor={total}
           currency={base}
@@ -119,9 +122,10 @@ export function WalletTotalSheet() {
           styles={styles}
           selectedDay={selectedDay}
           onSelectDay={onSelectDay}
+          t={t}
         />
 
-        <Text style={styles.sectionLabel}>ПО СЧЕТАМ</Text>
+        <Text style={styles.sectionLabel}>{t('walletTotal.byAccounts')}</Text>
         <View style={styles.card}>
           {accounts.map((a) => {
             const own = balances[a.id] ?? 0;
@@ -135,7 +139,7 @@ export function WalletTotalSheet() {
                 onPress={() => toggleAccount(a.id)}
                 accessibilityRole="checkbox"
                 accessibilityState={{ checked: enabled }}
-                accessibilityLabel={`Учитывать счёт «${a.name}» в статистике`}
+                accessibilityLabel={t('walletTotal.accountA11y', { name: displayAccountName(a) })}
               >
                 <View style={styles.rowLeft}>
                   <View style={[styles.checkbox, enabled ? styles.checkboxOn : styles.checkboxOff]}>
@@ -148,7 +152,7 @@ export function WalletTotalSheet() {
                     fallback="wallet-outline"
                   />
                   <Text style={[styles.rowName, !enabled && styles.rowMuted]} numberOfLines={1}>
-                    {a.name}
+                    {displayAccountName(a)}
                   </Text>
                 </View>
                 <View style={[styles.rowRight, !enabled && styles.rowFaded]}>
@@ -159,11 +163,7 @@ export function WalletTotalSheet() {
             );
           })}
         </View>
-        <Text style={styles.hint}>
-          Снимите галочку у счёта, чтобы исключить его из «всего денег» и графика. Суммы в других
-          валютах пересчитаны в {base} по текущему курсу. График — баланс за последние {CHART_DAYS}{' '}
-          дней; коснитесь столбика, чтобы увидеть баланс на тот день.
-        </Text>
+        <Text style={styles.hint}>{t('walletTotal.hint', { base, days: CHART_DAYS })}</Text>
       </BottomSheetScrollView>
     </BottomSheetModal>
   );
@@ -176,6 +176,7 @@ interface ChartProps {
   styles: ReturnType<typeof makeStyles>;
   selectedDay: string | null;
   onSelectDay: (day: string) => void;
+  t: ReturnType<typeof useTranslation>['t'];
 }
 
 /** 'YYYY-MM-DD' → 'DD.MM' for the selected-day caption. */
@@ -190,7 +191,7 @@ function formatDayShort(day: string): string {
  * shortest a 4px floor, so no day is clipped). Tapping a bar selects that day
  * and shows its balance; the header otherwise shows the window's net change.
  */
-function BalanceChart({ series, base, palette, styles, selectedDay, onSelectDay }: ChartProps) {
+function BalanceChart({ series, base, palette, styles, selectedDay, onSelectDay, t }: ChartProps) {
   if (series.length < 2) return <View style={styles.chartPlaceholder} />;
 
   const values = series.map((p) => p.totalBaseMinor);
@@ -224,7 +225,9 @@ function BalanceChart({ series, base, palette, styles, selectedDay, onSelectDay 
                 options={{ showPlus: true }}
                 style={[styles.chartChangeText, { color: change >= 0 ? palette.pos : palette.neg }]}
               />
-              <Text style={styles.chartChangeHint}>за {series.length} дн.</Text>
+              <Text style={styles.chartChangeHint}>
+                {t('walletTotal.overDays', { n: series.length })}
+              </Text>
             </>
           )}
         </View>
@@ -243,7 +246,7 @@ function BalanceChart({ series, base, palette, styles, selectedDay, onSelectDay 
               style={styles.chartBarWrap}
               onPress={() => onSelectDay(p.day)}
               accessibilityRole="button"
-              accessibilityLabel={`Баланс на ${formatDayShort(p.day)}`}
+              accessibilityLabel={t('walletTotal.balanceOnA11y', { day: formatDayShort(p.day) })}
             >
               <View
                 style={[

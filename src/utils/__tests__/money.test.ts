@@ -1,15 +1,22 @@
 import {
   accountBalance,
+  applyCrossRate,
   carryOver,
   convertFromBase,
   convertToBase,
+  crossRateE6,
   formatMoney,
   formatMoneyCompact,
+  formatMoneyPlain,
+  formatRate,
   getMinorUnits,
   localDay,
   minorToAmountInput,
   parseAmountToMinor,
+  parseRateToE6,
   perDay,
+  sanitizeRateInput,
+  setMoneyLocale,
   sumMixed,
 } from '@utils/money';
 
@@ -155,6 +162,11 @@ describe('universal multi-currency — triangle A → base → B (B7)', () => {
 });
 
 describe('formatMoney — the only formatter (rule 7)', () => {
+  // These assert the RU grouping style (space + comma); pin the locale so the
+  // suite is independent of the app default (now EN).
+  beforeAll(() => setMoneyLocale('ru'));
+  afterAll(() => setMoneyLocale('en'));
+
   it('groups thousands and shows two decimals with the code', () => {
     expect(formatMoney(1_234_56, 'USD')).toBe('1 234,56 USD');
     expect(formatMoney(-1_234_56, 'USD')).toBe('-1 234,56 USD');
@@ -206,6 +218,10 @@ describe('minorToAmountInput — editable field pre-fill (inverse of parseAmount
 });
 
 describe('formatMoneyCompact — abbreviated large values', () => {
+  // RU grouping style (space + comma); pin the locale (app default is now EN).
+  beforeAll(() => setMoneyLocale('ru'));
+  afterAll(() => setMoneyLocale('en'));
+
   it('keeps the full grouped form below 10 000 major units', () => {
     expect(formatMoneyCompact(1_000_00, 'BYN')).toBe('1 000,00 BYN');
     expect(formatMoneyCompact(9_999_99, 'BYN')).toBe('9 999,99 BYN');
@@ -234,5 +250,86 @@ describe('formatMoneyCompact — abbreviated large values', () => {
   it('truncates the fraction toward zero (never over-promises)', () => {
     // 19 999.00 → 19,9k (not rounded up to 20k).
     expect(formatMoneyCompact(19_999_00, 'BYN')).toBe('19,9k BYN');
+  });
+});
+
+describe('formatMoneyPlain — CSV dot-decimal', () => {
+  it('renders signed, ungrouped, dot-decimal values', () => {
+    expect(formatMoneyPlain(123456, 'USD')).toBe('1234.56');
+    expect(formatMoneyPlain(-4088, 'BYN')).toBe('-40.88');
+    expect(formatMoneyPlain(0, 'USD')).toBe('0.00');
+  });
+
+  it('honours the currency minor-unit precision', () => {
+    expect(formatMoneyPlain(-50, 'JPY')).toBe('-50'); // 0 minor digits
+    expect(formatMoneyPlain(1234, 'BHD')).toBe('1.234'); // 3 minor digits
+  });
+});
+
+describe('cross-currency manual rate (transfers)', () => {
+  it('crossRateE6 — implied from→to rate from two amounts (same minor units)', () => {
+    // 100.00 USD → 92.00 EUR ⇒ 0.92 per USD
+    expect(crossRateE6(10000, 'USD', 9200, 'EUR')).toBe(e6(0.92));
+    // 100.00 USD → 250.00 EUR ⇒ 2.5 per USD
+    expect(crossRateE6(10000, 'USD', 25000, 'EUR')).toBe(e6(2.5));
+  });
+
+  it('crossRateE6 — accounts for differing minor-unit precision', () => {
+    // 100.00 USD → 15000 JPY (0 minor) ⇒ 150 JPY per USD
+    expect(crossRateE6(10000, 'USD', 15000, 'JPY')).toBe(e6(150));
+    // 10000 JPY → 66.67 USD ⇒ 0.006667 USD per JPY
+    expect(crossRateE6(10000, 'JPY', 6667, 'USD')).toBe(e6(0.006667));
+  });
+
+  it('crossRateE6 — null for a non-positive source', () => {
+    expect(crossRateE6(0, 'USD', 100, 'EUR')).toBeNull();
+    expect(crossRateE6(-100, 'USD', 100, 'EUR')).toBeNull();
+  });
+
+  it('applyCrossRate — result in the target currency at the given rate', () => {
+    expect(applyCrossRate(10000, 'USD', e6(0.92), 'EUR')).toBe(9200); // 100 × 0.92 = 92.00
+    expect(applyCrossRate(10000, 'USD', e6(150), 'JPY')).toBe(15000); // 100 × 150 = 15000 JPY
+    expect(applyCrossRate(10000, 'JPY', e6(0.006667), 'USD')).toBe(6667);
+  });
+
+  it('applyCrossRate — round-trips with crossRateE6', () => {
+    const from = 12345; // 123.45 USD
+    const to = 9876; // 98.76 EUR
+    const rate = crossRateE6(from, 'USD', to, 'EUR');
+    expect(rate).not.toBeNull();
+    expect(applyCrossRate(from, 'USD', rate!, 'EUR')).toBe(to);
+  });
+
+  it('parseRateToE6 — decimal string to ×1e6', () => {
+    expect(parseRateToE6('2.5')).toBe(2_500_000);
+    expect(parseRateToE6('2,5')).toBe(2_500_000); // comma separator
+    expect(parseRateToE6('0.006667')).toBe(6_667);
+    expect(parseRateToE6('150')).toBe(150_000_000);
+    expect(parseRateToE6('1.2345678')).toBe(1_234_567); // truncated to 6 decimals
+  });
+
+  it('parseRateToE6 — null for empty / invalid / non-positive', () => {
+    expect(parseRateToE6('')).toBeNull();
+    expect(parseRateToE6('.')).toBeNull();
+    expect(parseRateToE6('0')).toBeNull();
+    expect(parseRateToE6('abc')).toBeNull();
+  });
+
+  it('formatRate — trims trailing zeros with the active locale separator', () => {
+    setMoneyLocale('en');
+    expect(formatRate(2_500_000)).toBe('2.5');
+    expect(formatRate(6_667)).toBe('0.006667');
+    expect(formatRate(150_000_000)).toBe('150');
+    setMoneyLocale('ru');
+    expect(formatRate(2_500_000)).toBe('2,5');
+    setMoneyLocale('en'); // restore default
+    expect(formatRate(0)).toBe('');
+  });
+
+  it('sanitizeRateInput — digits + one separator, ≤6 decimals', () => {
+    expect(sanitizeRateInput('2.5')).toBe('2.5');
+    expect(sanitizeRateInput('2.50a')).toBe('2.50');
+    expect(sanitizeRateInput('0.1234567')).toBe('0.123456'); // capped at 6
+    expect(sanitizeRateInput('1.2.3')).toBe('1.23'); // single separator kept
   });
 });

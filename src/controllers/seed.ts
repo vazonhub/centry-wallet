@@ -22,7 +22,7 @@ export async function seedDefaultsIfEmpty(): Promise<void> {
   if (accounts.length === 0) {
     const account: Account = {
       id: uuid(),
-      name: 'Основной',
+      name: 'Main',
       currency: DEFAULT_BASE_CURRENCY,
       kind: 'cash',
       icon: 'cash-outline',

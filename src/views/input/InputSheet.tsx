@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import SegmentedControl from '@react-native-segmented-control/segmented-control';
 import {
@@ -23,21 +24,27 @@ import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
 import { numberTextStyle, Radius, Spacing, Typography } from '@theme';
 import { hexToRgba } from '@utils/color';
+import { displayAccountName, displayCategoryName } from '@utils/displayName';
 import { hapticLight, hapticSuccess } from '@utils/haptics';
 import {
   amountPlaceholder,
+  applyCrossRate,
   convertFromBase,
   convertToBase,
+  crossRateE6,
   formatMoney,
+  formatRate,
   parseAmountToMinor,
+  parseRateToE6,
   sanitizeAmountInput,
+  sanitizeRateInput,
 } from '@utils/money';
 
 const E6_ONE = 1_000_000;
-const ACCOUNT_KINDS: { kind: Account['kind']; label: string; icon: IoniconName }[] = [
-  { kind: 'cash', label: 'Наличные', icon: ACCOUNT_KIND_ICONS.cash },
-  { kind: 'card', label: 'Карта', icon: ACCOUNT_KIND_ICONS.card },
-  { kind: 'wallet', label: 'Кошелёк', icon: ACCOUNT_KIND_ICONS.wallet },
+const ACCOUNT_KINDS: { kind: Account['kind']; icon: IoniconName }[] = [
+  { kind: 'cash', icon: ACCOUNT_KIND_ICONS.cash },
+  { kind: 'card', icon: ACCOUNT_KIND_ICONS.card },
+  { kind: 'wallet', icon: ACCOUNT_KIND_ICONS.wallet },
 ];
 
 type CreateTarget = 'main' | 'from' | 'to';
@@ -49,6 +56,7 @@ type CreateTarget = 'main' | 'from' | 'to';
  * account creation (D7).
  */
 export function InputSheet() {
+  const { t } = useTranslation();
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
 
@@ -66,7 +74,13 @@ export function InputSheet() {
   const [occurredAt, setOccurredAt] = useState<Date>(() => new Date());
   const [fromAccountId, setFromAccountId] = useState<string | null>(null);
   const [toAccountId, setToAccountId] = useState<string | null>(null);
-  const [amountTo, setAmountTo] = useState('');
+  // Cross-currency transfer override: the user either dictates the exchange RATE
+  // (result is recomputed from it) or the FINAL amount (kept verbatim — a real
+  // bank exchange with fees can differ). null = follow the market rate.
+  const [transferOverride, setTransferOverride] = useState<{
+    mode: 'rate' | 'final';
+    text: string;
+  } | null>(null);
 
   const [createTarget, setCreateTarget] = useState<CreateTarget | null>(null);
   const [newName, setNewName] = useState('');
@@ -103,7 +117,7 @@ export function InputSheet() {
     setAccountId(initial);
     setFromAccountId(initial);
     setToAccountId(accounts.find((a) => a.id !== initial)?.id ?? null);
-    setAmountTo('');
+    setTransferOverride(null);
     setCreateTarget(null);
   }, [lastAccountId, accounts]);
 
@@ -152,18 +166,52 @@ export function InputSheet() {
 
   const transfer = useMemo(() => {
     if (!fromAccount || !toAccount) return null;
-    const fromMinor = parseAmountToMinor(amount, fromAccount.currency);
+    const from = fromAccount.currency;
+    const to = toAccount.currency;
+    const fromMinor = parseAmountToMinor(amount, from);
     if (fromMinor == null || fromMinor <= 0) return null;
-    const sameCurrency = fromAccount.currency === toAccount.currency;
-    const suggestedTo = sameCurrency
+    const sameCurrency = from === to;
+
+    // The market result and the from→to rate it implies (defaults).
+    const marketToMinor = sameCurrency
       ? fromMinor
-      : convertFromBase(
-          convertToBase(fromMinor, rateOf(fromAccount.currency)),
-          rateOf(toAccount.currency),
-        );
-    const manualTo = amountTo.trim() ? parseAmountToMinor(amountTo, toAccount.currency) : null;
-    return { fromMinor, toMinor: manualTo ?? suggestedTo, suggestedTo, sameCurrency };
-  }, [fromAccount, toAccount, amount, amountTo, rateOf]);
+      : convertFromBase(convertToBase(fromMinor, rateOf(from)), rateOf(to));
+    const marketRateE6 = crossRateE6(fromMinor, from, marketToMinor, to) ?? E6_ONE;
+
+    if (sameCurrency) {
+      return { fromMinor, toMinor: fromMinor, sameCurrency, rateE6: E6_ONE, marketRateE6 };
+    }
+
+    // RATE override → recompute the result from the entered rate.
+    if (transferOverride?.mode === 'rate') {
+      const rateE6 = parseRateToE6(transferOverride.text) ?? marketRateE6;
+      return {
+        fromMinor,
+        toMinor: applyCrossRate(fromMinor, from, rateE6, to),
+        sameCurrency,
+        rateE6,
+        marketRateE6,
+      };
+    }
+
+    // FINAL override → keep the entered amount; the rate is derived from it.
+    if (transferOverride?.mode === 'final') {
+      const entered = transferOverride.text.trim()
+        ? parseAmountToMinor(transferOverride.text, to)
+        : null;
+      const toMinor = entered != null && entered > 0 ? entered : marketToMinor;
+      return {
+        fromMinor,
+        toMinor,
+        sameCurrency,
+        rateE6: crossRateE6(fromMinor, from, toMinor, to) ?? marketRateE6,
+        marketRateE6,
+      };
+    }
+
+    // Follow the market rate.
+    return { fromMinor, toMinor: marketToMinor, sameCurrency, rateE6: marketRateE6, marketRateE6 };
+  }, [fromAccount, toAccount, amount, transferOverride, rateOf]);
 
   const onSaveTransfer = useCallback(async () => {
     if (!fromAccount || !toAccount || !transfer) return;
@@ -180,7 +228,7 @@ export function InputSheet() {
     });
     hapticSuccess();
     setAmount('');
-    setAmountTo('');
+    setTransferOverride(null);
     setNote('');
     setOccurredAt(new Date());
     inputSheetRef.current?.dismiss();
@@ -241,7 +289,8 @@ export function InputSheet() {
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.chipsRow}
+      style={styles.chipsScroll}
+      contentContainerStyle={styles.chipsScrollContent}
     >
       {accounts.map((a) => {
         const active = a.id === selectedId;
@@ -261,13 +310,13 @@ export function InputSheet() {
               fallback="wallet-outline"
             />
             <Text style={[styles.chipText, active && styles.chipTextActive]}>
-              {a.name} · {a.currency}
+              {displayAccountName(a)} · {a.currency}
             </Text>
           </Pressable>
         );
       })}
       <Pressable onPress={() => beginCreate(target)} style={styles.chip}>
-        <Text style={styles.chipText}>＋ Счёт</Text>
+        <Text style={styles.chipText}>{t('input.addAccount')}</Text>
       </Pressable>
     </ScrollView>
   );
@@ -292,17 +341,17 @@ export function InputSheet() {
       <BottomSheetScrollView contentContainerStyle={styles.container}>
         {createTarget !== null ? (
           <>
-            <Text style={styles.heading}>Новый счёт</Text>
+            <Text style={styles.heading}>{t('input.newAccount')}</Text>
             <BottomSheetTextInput
               style={styles.note}
               value={newName}
               onChangeText={setNewName}
-              placeholder="Название (напр. Наличные USD)"
+              placeholder={t('input.namePlaceholder')}
               placeholderTextColor={palette.dim2}
             />
-            <Text style={styles.label}>ВАЛЮТА</Text>
+            <Text style={styles.label}>{t('input.currency')}</Text>
             <CurrencyDropdown value={newCurrency} onChange={setNewCurrency} />
-            <Text style={styles.label}>ТИП</Text>
+            <Text style={styles.label}>{t('input.type')}</Text>
             <View style={styles.chipsRow}>
               {ACCOUNT_KINDS.map((k) => {
                 const active = k.kind === newKind;
@@ -321,7 +370,7 @@ export function InputSheet() {
                       size={15}
                     />
                     <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                      {k.label}
+                      {t(`input.kind_${k.kind}`)}
                     </Text>
                   </Pressable>
                 );
@@ -332,22 +381,23 @@ export function InputSheet() {
                 onPress={() => setCreateTarget(null)}
                 style={[styles.save, styles.secondary]}
               >
-                <Text style={styles.secondaryText}>Отмена</Text>
+                <Text style={styles.secondaryText}>{t('common.cancel')}</Text>
               </Pressable>
               <Pressable onPress={onCreateAccount} style={styles.save}>
-                <Text style={styles.saveText}>Создать</Text>
+                <Text style={styles.saveText}>{t('input.create')}</Text>
               </Pressable>
             </View>
           </>
         ) : (
           <>
             <SegmentedControl
-              values={['Расход', 'Доход', 'Перевод']}
+              values={[t('input.expense'), t('input.income'), t('input.transfer')]}
               selectedIndex={kind === 'expense' ? 0 : kind === 'income' ? 1 : 2}
               onChange={(e) => {
                 const i = e.nativeEvent.selectedSegmentIndex;
                 setKind(i === 0 ? 'expense' : i === 1 ? 'income' : 'transfer');
                 setCategoryId(null);
+                setTransferOverride(null);
                 hapticLight();
               }}
             />
@@ -369,21 +419,59 @@ export function InputSheet() {
 
             {kind === 'transfer' ? (
               <>
-                <Text style={styles.label}>СО СЧЁТА</Text>
-                {renderAccountChips(fromAccountId, setFromAccountId, 'from')}
-                <Text style={styles.label}>НА СЧЁТ</Text>
-                {renderAccountChips(toAccountId, setToAccountId, 'to')}
-                {transfer && !transfer.sameCurrency && toAccount && (
+                <Text style={styles.label}>{t('input.fromAccount')}</Text>
+                {renderAccountChips(
+                  fromAccountId,
+                  (id) => {
+                    setFromAccountId(id);
+                    setTransferOverride(null);
+                  },
+                  'from',
+                )}
+                <Text style={styles.label}>{t('input.toAccount')}</Text>
+                {renderAccountChips(
+                  toAccountId,
+                  (id) => {
+                    setToAccountId(id);
+                    setTransferOverride(null);
+                  },
+                  'to',
+                )}
+                {transfer && !transfer.sameCurrency && fromAccount && toAccount && (
                   <>
-                    <Text style={styles.label}>ИТОГ ({toAccount.currency})</Text>
+                    <Text style={styles.label}>{t('input.rate')}</Text>
+                    <View style={styles.amountRow}>
+                      <Text style={styles.rateHint}>1 {fromAccount.currency} =</Text>
+                      <BottomSheetTextInput
+                        style={styles.amountSmall}
+                        value={
+                          transferOverride?.mode === 'rate'
+                            ? transferOverride.text
+                            : formatRate(transfer.rateE6)
+                        }
+                        onChangeText={(v) =>
+                          setTransferOverride({ mode: 'rate', text: sanitizeRateInput(v) })
+                        }
+                        placeholder={formatRate(transfer.marketRateE6)}
+                        placeholderTextColor={palette.dim2}
+                        keyboardType="decimal-pad"
+                      />
+                      <Text style={styles.currency}>{toAccount.currency}</Text>
+                    </View>
+                    <Text style={styles.label}>
+                      {t('input.total', { currency: toAccount.currency })}
+                    </Text>
                     <View style={styles.amountRow}>
                       <BottomSheetTextInput
                         style={styles.amountSmall}
-                        value={amountTo}
-                        onChangeText={(t) =>
-                          setAmountTo(sanitizeAmountInput(t, toAccount.currency))
+                        value={transferOverride?.mode === 'final' ? transferOverride.text : ''}
+                        onChangeText={(v) =>
+                          setTransferOverride({
+                            mode: 'final',
+                            text: sanitizeAmountInput(v, toAccount.currency),
+                          })
                         }
-                        placeholder={formatMoney(transfer.suggestedTo, toAccount.currency, {
+                        placeholder={formatMoney(transfer.toMinor, toAccount.currency, {
                           hideCode: true,
                         })}
                         placeholderTextColor={palette.dim2}
@@ -402,7 +490,8 @@ export function InputSheet() {
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.chipsRow}
+                  style={styles.chipsScroll}
+                  contentContainerStyle={styles.chipsScrollContent}
                 >
                   {kindCategories.map((c) => {
                     const active = c.id === categoryId;
@@ -433,7 +522,7 @@ export function InputSheet() {
                           style={[styles.catText, active && styles.catTextActive]}
                           numberOfLines={1}
                         >
-                          {c.name}
+                          {displayCategoryName(c)}
                         </Text>
                       </Pressable>
                     );
@@ -448,7 +537,7 @@ export function InputSheet() {
                       <AppIcon name="add" color={palette.dim} size={20} />
                     </View>
                     <Text style={styles.catText} numberOfLines={1}>
-                      Добавить
+                      {t('common.add')}
                     </Text>
                   </Pressable>
                 </ScrollView>
@@ -459,12 +548,12 @@ export function InputSheet() {
               style={styles.note}
               value={note}
               onChangeText={setNote}
-              placeholder="Заметка (необязательно)"
+              placeholder={t('input.notePlaceholder')}
               placeholderTextColor={palette.dim2}
             />
 
             <View style={styles.dateRow}>
-              <Text style={styles.label}>ДАТА</Text>
+              <Text style={styles.label}>{t('input.date')}</Text>
               <DateTimePicker
                 value={occurredAt}
                 mode="date"
@@ -479,7 +568,7 @@ export function InputSheet() {
               onPress={onSave}
               style={[styles.save, !canSave && styles.saveDisabled]}
             >
-              <Text style={styles.saveText}>Сохранить</Text>
+              <Text style={styles.saveText}>{t('common.save')}</Text>
             </Pressable>
           </>
         )}
@@ -529,6 +618,17 @@ const makeStyles = (p: Palette) =>
     currency: { ...numberTextStyle, color: p.dim, fontSize: Typography.title.fontSize },
     rateHint: { ...numberTextStyle, color: p.dim, fontSize: Typography.footnote.fontSize },
     chipsRow: { gap: Spacing.sm, paddingVertical: Spacing.xs, flexDirection: 'row' },
+    // Full-bleed horizontal chip lists: the ScrollView breaks out of the sheet's
+    // screen padding so the list scrolls edge-to-edge, while the content keeps
+    // the same inset (first/last chip aligned to the padding) — matching the
+    // Home account chips and History filters.
+    chipsScroll: { marginHorizontal: -Spacing.screenPadding },
+    chipsScrollContent: {
+      flexDirection: 'row',
+      gap: Spacing.sm,
+      paddingVertical: Spacing.xs,
+      paddingHorizontal: Spacing.screenPadding,
+    },
     chip: {
       paddingHorizontal: Spacing.lg,
       paddingVertical: Spacing.sm,

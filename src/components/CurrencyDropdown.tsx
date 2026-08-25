@@ -6,6 +6,7 @@ import { COMMON_CURRENCIES } from '@constants/currencies';
 import { usePalette } from '@hooks/usePalette';
 import type { Palette } from '@theme';
 import { Radius, Spacing, Typography } from '@theme';
+import { currencyName } from '@utils/displayName';
 import { hapticLight } from '@utils/haptics';
 
 interface Props {
@@ -39,7 +40,7 @@ export function CurrencyDropdown({ value, onChange }: Props) {
       >
         <Text style={styles.fieldText} numberOfLines={1}>
           {value}
-          {selected ? ` · ${selected.name}` : ''}
+          {selected ? ` · ${currencyName(selected.code)}` : ''}
         </Text>
         <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={palette.dim} />
       </Pressable>
@@ -64,7 +65,7 @@ export function CurrencyDropdown({ value, onChange }: Props) {
                   }}
                 >
                   <Text style={[styles.itemText, active && styles.itemTextActive]}>
-                    {c.code} · {c.name}
+                    {c.code} · {currencyName(c.code)}
                   </Text>
                   {active && <Ionicons name="checkmark" size={18} color={palette.accent} />}
                 </Pressable>

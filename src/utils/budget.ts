@@ -122,8 +122,3 @@ export function effectivePeriod(
     daysElapsed: Math.max(1, daysInclusive(start, todayLocalDay)),
   };
 }
-
-/** Human label for a period, e.g. for the "не хватит на неделю" warning. */
-export function periodLabel(period: BudgetPeriod): string {
-  return period === 'week' ? 'неделю' : 'месяц';
-}

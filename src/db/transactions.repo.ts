@@ -86,6 +86,16 @@ export async function listRecentTransactions(limit = 50): Promise<Transaction[]>
   return rows.map(mapRow);
 }
 
+/** Every non-deleted transaction, oldest first — the full CSV export set. */
+export async function listAllTransactions(): Promise<Transaction[]> {
+  const db = getDb();
+  const rows = await db.getAllAsync<TransactionRow>(
+    `SELECT * FROM transactions WHERE deleted_at IS NULL
+     ORDER BY occurred_at ASC, created_at ASC;`,
+  );
+  return rows.map(mapRow);
+}
+
 /** Transactions for a month, `monthPrefix` = 'YYYY-MM' (matched against local_day). */
 export async function listTransactionsByMonth(monthPrefix: string): Promise<Transaction[]> {
   const db = getDb();
@@ -159,6 +169,20 @@ export async function softDeleteTransaction(id: Id, deletedAt: number): Promise<
     deletedAt,
     id,
   ]);
+}
+
+/**
+ * Soft-deletes BOTH legs of a transfer (all rows sharing `transferPairId`). A
+ * transfer is stored as two linked rows but shown as one; deleting only the
+ * visible leg would leave the hidden leg skewing the other account's balance.
+ */
+export async function softDeleteTransferPair(pairId: Id, deletedAt: number): Promise<void> {
+  const db = getDb();
+  await db.runAsync(
+    `UPDATE transactions SET deleted_at = ?, updated_at = ?
+     WHERE transfer_pair_id = ? AND deleted_at IS NULL;`,
+    [deletedAt, deletedAt, pairId],
+  );
 }
 
 // --- Aggregates (docs/DATA_MODEL.md#ключевые-запросы) ----------------------

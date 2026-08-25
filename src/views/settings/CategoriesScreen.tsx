@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -11,9 +12,11 @@ import { useDataStore } from '@stores/data.store';
 import type { Palette } from '@theme';
 import { Radius, Spacing, TAB_BAR_HEIGHT, Typography } from '@theme';
 import { hexToRgba } from '@utils/color';
+import { displayCategoryName } from '@utils/displayName';
 import { hapticLight } from '@utils/haptics';
 
 export function CategoriesScreen() {
+  const { t } = useTranslation();
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const insets = useSafeAreaInsets();
@@ -43,7 +46,7 @@ export function CategoriesScreen() {
               <AppIcon name={c.icon} color={c.color} size={18} />
             </View>
             <Text style={styles.name} numberOfLines={1}>
-              {c.name}
+              {displayCategoryName(c)}
             </Text>
             <AppIcon name="chevron-forward" color={palette.dim2} size={16} />
           </Pressable>
@@ -55,7 +58,7 @@ export function CategoriesScreen() {
             openCategoryEditor({ kind });
           }}
         >
-          <Text style={styles.action}>＋ Добавить категорию</Text>
+          <Text style={styles.action}>{t('categoriesScreen.addCategory')}</Text>
         </Pressable>
       </View>
     </View>
@@ -63,7 +66,7 @@ export function CategoriesScreen() {
 
   return (
     <View style={styles.canvas}>
-      <ScreenHeader title="Категории" />
+      <ScreenHeader title={t('categoriesScreen.title')} />
       <ScrollView
         contentContainerStyle={[
           styles.scroll,
@@ -71,8 +74,8 @@ export function CategoriesScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {renderSection('РАСХОДЫ', 'expense', groups.expense)}
-        {renderSection('ДОХОДЫ', 'income', groups.income)}
+        {renderSection(t('categoriesScreen.expenses'), 'expense', groups.expense)}
+        {renderSection(t('categoriesScreen.incomes'), 'income', groups.income)}
       </ScrollView>
     </View>
   );

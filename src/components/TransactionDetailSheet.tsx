@@ -1,4 +1,5 @@
 import { useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {
@@ -23,6 +24,7 @@ import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
 import { Radius, Spacing, Typography } from '@theme';
 import { currentTzOffsetMin } from '@utils/date';
+import { displayAccountName, displayCategoryName } from '@utils/displayName';
 import { hapticLight } from '@utils/haptics';
 import {
   amountPlaceholder,
@@ -52,6 +54,7 @@ function DetailRow({ label, value, styles }: { label: string; value: string; sty
  * store); `onChanged` refreshes the opener's own view.
  */
 export function TransactionDetailSheet() {
+  const { t } = useTranslation();
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const sheetRef = useRef<BottomSheetModal>(null);
@@ -127,7 +130,7 @@ export function TransactionDetailSheet() {
     if (!tx) return;
     const current = tx;
     Alert.prompt(
-      'Заметка',
+      t('detail.note'),
       undefined,
       async (value?: string) => {
         const note = value?.trim() || null;
@@ -138,15 +141,15 @@ export function TransactionDetailSheet() {
       'plain-text',
       current.note ?? '',
     );
-  }, [tx]);
+  }, [tx, t]);
 
   const onDelete = useCallback(() => {
     if (!tx) return;
     const current = tx;
-    Alert.alert('Удалить запись?', 'Действие можно отменить только повторным вводом.', [
-      { text: 'Отмена', style: 'cancel' },
+    Alert.alert(t('detail.deleteTitle'), t('detail.deleteBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Удалить',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
           await TransactionsController.deleteTransaction(current.id);
@@ -155,7 +158,7 @@ export function TransactionDetailSheet() {
         },
       },
     ]);
-  }, [tx]);
+  }, [tx, t]);
 
   const renderBackdrop = useCallback(
     (props: BottomSheetBackdropProps) => (
@@ -169,10 +172,10 @@ export function TransactionDetailSheet() {
   return (
     <BottomSheetModal
       ref={sheetRef}
-      snapPoints={['60%']}
+      snapPoints={['60%', '92%']}
       enableDynamicSizing={false}
       enablePanDownToClose
-      keyboardBehavior="interactive"
+      keyboardBehavior="extend"
       keyboardBlurBehavior="restore"
       backdropComponent={renderBackdrop}
       backgroundStyle={styles.sheetBg}
@@ -209,25 +212,25 @@ export function TransactionDetailSheet() {
                     value={amountText}
                     onChangeText={(t) => setAmountText(sanitizeAmountInput(t, tx.currency))}
                     keyboardType="decimal-pad"
-                    returnKeyType="done"
                     placeholder={amountPlaceholder(tx.currency)}
                     placeholderTextColor={palette.dim2}
                     onEndEditing={() => void commitAmount()}
-                    onSubmitEditing={() => void commitAmount()}
                   />
                   <Text style={styles.amountCurrency}>{tx.currency}</Text>
                 </View>
-                <Text style={styles.editHint}>нажмите на сумму, чтобы изменить</Text>
+                <Text style={styles.editHint}>{t('detail.editHint')}</Text>
               </>
             )}
             <View style={styles.detailRows}>
               <DetailRow
-                label="Счёт"
-                value={accounts.find((a) => a.id === tx.accountId)?.name ?? '—'}
+                label={t('detail.account')}
+                value={displayAccountName(
+                  accounts.find((a) => a.id === tx.accountId) ?? { name: '—', isDefault: false },
+                )}
                 styles={styles}
               />
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Дата</Text>
+                <Text style={styles.detailLabel}>{t('detail.date')}</Text>
                 <DateTimePicker
                   value={new Date(tx.occurredAt * 1000)}
                   mode="date"
@@ -237,12 +240,12 @@ export function TransactionDetailSheet() {
                 />
               </View>
               <DetailRow
-                label="Курс к базе"
+                label={t('detail.rateToBase')}
                 value={`${(tx.rateToBaseE6 / 1_000_000).toFixed(4)} ${base}`}
                 styles={styles}
               />
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>В базе</Text>
+                <Text style={styles.detailLabel}>{t('detail.inBase')}</Text>
                 <Money
                   minor={convertToBase(tx.amountMinor, tx.rateToBaseE6)}
                   currency={base}
@@ -254,7 +257,7 @@ export function TransactionDetailSheet() {
 
             {!isTransfer && (
               <>
-                <Text style={styles.sectionTitle}>КАТЕГОРИЯ</Text>
+                <Text style={styles.sectionTitle}>{t('detail.category')}</Text>
                 <View style={styles.catWrap}>
                   {detailCategories.map((c) => {
                     const active = c.id === tx.categoryId;
@@ -270,7 +273,7 @@ export function TransactionDetailSheet() {
                           size={14}
                         />
                         <Text style={[styles.chipText, active && styles.chipTextActive]}>
-                          {c.name}
+                          {displayCategoryName(c)}
                         </Text>
                       </Pressable>
                     );
@@ -281,10 +284,10 @@ export function TransactionDetailSheet() {
 
             <View style={styles.actions}>
               <Pressable onPress={onEditNote} style={[styles.actionBtn, styles.secondary]}>
-                <Text style={styles.secondaryText}>Заметка</Text>
+                <Text style={styles.secondaryText}>{t('detail.note')}</Text>
               </Pressable>
               <Pressable onPress={onDelete} style={[styles.actionBtn, styles.danger]}>
-                <Text style={[styles.dangerText, { color: WHITE }]}>Удалить</Text>
+                <Text style={[styles.dangerText, { color: WHITE }]}>{t('common.delete')}</Text>
               </Pressable>
             </View>
           </>

@@ -26,9 +26,59 @@ struct CentrySnapshot: Codable, Hashable {
   let todaySpentMinor: Int
   let periodRemainingMinor: Int
   let periodLabel: String
+  let allowanceTitle: String
+  let spentLabel: String
+  let forPeriodLabel: String
+  let emptyLabel: String
   let accounts: [WidgetAccount]
   let recent: [WidgetRecent]
   let updatedAt: Int
+
+  /// Localized UI strings are injected by the app, but older snapshots (written
+  /// before this field existed) decode without them — default to English so the
+  /// widget never shows an empty label.
+  enum CodingKeys: String, CodingKey {
+    case perDayMinor, currency, daysLeft, todaySpentMinor, periodRemainingMinor, periodLabel
+    case allowanceTitle, spentLabel, forPeriodLabel, emptyLabel, accounts, recent, updatedAt
+  }
+
+  init(
+    perDayMinor: Int, currency: String, daysLeft: Int, todaySpentMinor: Int,
+    periodRemainingMinor: Int, periodLabel: String, allowanceTitle: String, spentLabel: String,
+    forPeriodLabel: String, emptyLabel: String, accounts: [WidgetAccount], recent: [WidgetRecent],
+    updatedAt: Int
+  ) {
+    self.perDayMinor = perDayMinor
+    self.currency = currency
+    self.daysLeft = daysLeft
+    self.todaySpentMinor = todaySpentMinor
+    self.periodRemainingMinor = periodRemainingMinor
+    self.periodLabel = periodLabel
+    self.allowanceTitle = allowanceTitle
+    self.spentLabel = spentLabel
+    self.forPeriodLabel = forPeriodLabel
+    self.emptyLabel = emptyLabel
+    self.accounts = accounts
+    self.recent = recent
+    self.updatedAt = updatedAt
+  }
+
+  init(from decoder: Decoder) throws {
+    let c = try decoder.container(keyedBy: CodingKeys.self)
+    perDayMinor = try c.decode(Int.self, forKey: .perDayMinor)
+    currency = try c.decode(String.self, forKey: .currency)
+    daysLeft = try c.decode(Int.self, forKey: .daysLeft)
+    todaySpentMinor = try c.decode(Int.self, forKey: .todaySpentMinor)
+    periodRemainingMinor = try c.decode(Int.self, forKey: .periodRemainingMinor)
+    periodLabel = try c.decode(String.self, forKey: .periodLabel)
+    allowanceTitle = (try? c.decode(String.self, forKey: .allowanceTitle)) ?? "CAN SPEND TODAY"
+    spentLabel = (try? c.decode(String.self, forKey: .spentLabel)) ?? "spent"
+    forPeriodLabel = (try? c.decode(String.self, forKey: .forPeriodLabel)) ?? "for the period"
+    emptyLabel = (try? c.decode(String.self, forKey: .emptyLabel)) ?? "No records"
+    accounts = try c.decode([WidgetAccount].self, forKey: .accounts)
+    recent = try c.decode([WidgetRecent].self, forKey: .recent)
+    updatedAt = try c.decode(Int.self, forKey: .updatedAt)
+  }
 
   /// Shown before the app has ever written a snapshot (fresh install / preview).
   static let placeholder = CentrySnapshot(
@@ -37,7 +87,11 @@ struct CentrySnapshot: Codable, Hashable {
     daysLeft: 1,
     todaySpentMinor: 0,
     periodRemainingMinor: 0,
-    periodLabel: "месяц",
+    periodLabel: "month",
+    allowanceTitle: "CAN SPEND TODAY",
+    spentLabel: "spent",
+    forPeriodLabel: "for the month",
+    emptyLabel: "No records",
     accounts: [],
     recent: [],
     updatedAt: 0

@@ -59,6 +59,18 @@ export function convertFromBase(baseMinor: number, rateToBaseE6: number): number
   return Number(divRoundHalfAwayFromZero(product, BigInt(rateToBaseE6)));
 }
 
+/**
+ * The rate_to_base_e6 that makes `amountMinor` convert back to exactly
+ * `baseMinor` — i.e. round(baseMinor × 1e6 / amountMinor). Used when an account's
+ * currency changes: the recorded amount moves to the new currency but its value
+ * in the base currency is preserved, so History/stats totals stay unchanged.
+ * Returns 1e6 (1:1) when `amountMinor` is 0 (no meaningful rate).
+ */
+export function deriveRateToBaseE6(amountMinor: number, baseMinor: number): number {
+  if (amountMinor === 0) return Number(RATE_SCALE);
+  return Number(divRoundHalfAwayFromZero(BigInt(baseMinor) * RATE_SCALE, BigInt(amountMinor)));
+}
+
 /** Sums mixed-currency items into base-currency minor units (each converted, then added). */
 export function sumMixed(items: { amountMinor: number; rateToBaseE6: number }[]): number {
   let total = 0n;

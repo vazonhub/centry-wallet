@@ -10,6 +10,7 @@ import {
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
 
+import { AccountDropdown } from '@components/AccountDropdown';
 import { AppIcon } from '@components/AppIcon';
 import { Money } from '@components/Money';
 import {
@@ -22,18 +23,26 @@ import type { Category, Transaction } from '@models';
 import { useDataStore } from '@stores/data.store';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
-import { Radius, Spacing, Typography } from '@theme';
+import { numberTextStyle, Radius, Spacing, Typography } from '@theme';
 import { currentTzOffsetMin } from '@utils/date';
-import { displayAccountName, displayCategoryName } from '@utils/displayName';
-import { hapticLight } from '@utils/haptics';
+import { displayCategoryName } from '@utils/displayName';
+import { hapticLight, hapticSuccess } from '@utils/haptics';
 import {
   amountPlaceholder,
+  applyCrossRate,
   convertToBase,
+  crossRateE6,
+  formatMoney,
+  formatRate,
   localDay,
   minorToAmountInput,
   parseAmountToMinor,
+  parseRateToE6,
   sanitizeAmountInput,
+  sanitizeRateInput,
 } from '@utils/money';
+
+const E6_ONE = 1_000_000;
 
 const WHITE = '#ffffff'; // white text on the saturated red delete button (both themes)
 
@@ -64,13 +73,28 @@ export function TransactionDetailSheet() {
   const base = useSettingsStore((s) => s.baseCurrency);
 
   const [tx, setTx] = useState<Transaction | null>(null);
+  // The other leg of a transfer (so both amounts can be edited together).
+  const [sibling, setSibling] = useState<Transaction | null>(null);
   // Editable amount text (magnitude in the tx's own currency), seeded on open.
   const [amountText, setAmountText] = useState('');
+  // Transfer editing: the source magnitude text, plus a rate/final override that
+  // works exactly like the input sheet (edit the rate → final recomputes; edit
+  // the final → rate recomputes; otherwise the stored rate is kept).
+  const [fromText, setFromText] = useState('');
+  const [transferOverride, setTransferOverride] = useState<{
+    mode: 'rate' | 'final';
+    text: string;
+  } | null>(null);
   const onChangedRef = useRef<(() => void) | undefined>(undefined);
 
-  const open = useCallback((next: Transaction, onChanged?: () => void) => {
+  const open = useCallback((next: Transaction, onChanged?: () => void, pair?: Transaction) => {
     setTx(next);
+    setSibling(pair ?? null);
     setAmountText(minorToAmountInput(Math.abs(next.amountMinor), next.currency));
+    // Seed the source field from the from-leg (the negative one of the pair).
+    const fromLeg = next.amountMinor < 0 ? next : (pair ?? next);
+    setFromText(minorToAmountInput(Math.abs(fromLeg.amountMinor), fromLeg.currency));
+    setTransferOverride(null);
     onChangedRef.current = onChanged;
     sheetRef.current?.present();
     hapticLight();
@@ -94,6 +118,126 @@ export function TransactionDetailSheet() {
     },
     [tx],
   );
+
+  // Only same-currency accounts can host this transaction (balances sum amounts
+  // without conversion), so the picker offers just those.
+  const detailAccounts = useMemo(
+    () => (tx ? accounts.filter((a) => a.currency === tx.currency) : []),
+    [accounts, tx],
+  );
+
+  const onPickAccount = useCallback(
+    async (accountId: string) => {
+      if (!tx || tx.accountId === accountId) return;
+      const prev = tx;
+      setTx({ ...prev, accountId }); // optimistic
+      try {
+        await TransactionsController.editTransactionAccount(prev.id, accountId);
+        onChangedRef.current?.();
+        hapticLight();
+      } catch {
+        setTx(prev); // revert if the move was rejected
+      }
+    },
+    [tx],
+  );
+
+  // Derived transfer values from the two legs + the edit fields (mirrors the
+  // input sheet). `from`/`to` are the negative/positive legs of the pair.
+  const transferEdit = useMemo(() => {
+    if (!tx?.transferPairId) return null;
+    const from = tx.amountMinor < 0 ? tx : sibling;
+    const to = tx.amountMinor > 0 ? tx : sibling;
+    if (!from || !to) return null;
+    const fromCur = from.currency;
+    const toCur = to.currency;
+    const sameCurrency = fromCur === toCur;
+    const origFromMinor = Math.abs(from.amountMinor);
+    const origToMinor = Math.abs(to.amountMinor);
+    const baseRateE6 = crossRateE6(origFromMinor, fromCur, origToMinor, toCur) ?? E6_ONE;
+    const fromMinor = parseAmountToMinor(fromText, fromCur) ?? origFromMinor;
+
+    let toMinor: number;
+    let rateE6: number;
+    if (sameCurrency) {
+      toMinor = fromMinor;
+      rateE6 = E6_ONE;
+    } else if (transferOverride?.mode === 'rate') {
+      rateE6 = parseRateToE6(transferOverride.text) ?? baseRateE6;
+      toMinor = applyCrossRate(fromMinor, fromCur, rateE6, toCur);
+    } else if (transferOverride?.mode === 'final') {
+      const entered = transferOverride.text.trim()
+        ? parseAmountToMinor(transferOverride.text, toCur)
+        : null;
+      toMinor = entered != null && entered > 0 ? entered : origToMinor;
+      rateE6 = crossRateE6(fromMinor, fromCur, toMinor, toCur) ?? baseRateE6;
+    } else {
+      // Rate-locked: keep the stored rate; no drift when nothing changed.
+      rateE6 = baseRateE6;
+      toMinor =
+        fromMinor === origFromMinor
+          ? origToMinor
+          : applyCrossRate(fromMinor, fromCur, baseRateE6, toCur);
+    }
+    const dirty = fromMinor !== origFromMinor || toMinor !== origToMinor;
+    return {
+      from,
+      to,
+      fromCur,
+      toCur,
+      sameCurrency,
+      fromMinor,
+      toMinor,
+      rateE6,
+      baseRateE6,
+      dirty,
+    };
+  }, [tx, sibling, fromText, transferOverride]);
+
+  const onPickTransferAccount = useCallback(
+    async (side: 'from' | 'to', accountId: string) => {
+      if (!tx?.transferPairId || !transferEdit) return;
+      const leg = side === 'from' ? transferEdit.from : transferEdit.to;
+      if (leg.accountId === accountId) return;
+      const apply = (l: Transaction) => (l.id === leg.id ? { ...l, accountId } : l);
+      const prevTx = tx;
+      const prevSib = sibling;
+      setTx(apply(tx)); // optimistic
+      setSibling(sibling ? apply(sibling) : null);
+      try {
+        await TransactionsController.editTransferAccount(tx.transferPairId, side, accountId);
+        onChangedRef.current?.();
+        hapticLight();
+      } catch {
+        setTx(prevTx);
+        setSibling(prevSib);
+      }
+    },
+    [tx, sibling, transferEdit],
+  );
+
+  const commitTransfer = useCallback(async () => {
+    if (!tx?.transferPairId || !transferEdit || !transferEdit.dirty) return;
+    const { from, to, fromMinor, toMinor } = transferEdit;
+    if (fromMinor <= 0 || toMinor <= 0) return;
+    await TransactionsController.editTransfer(tx.transferPairId, {
+      fromMinorAbs: fromMinor,
+      toMinorAbs: toMinor,
+    });
+    const newFrom = { ...from, amountMinor: -fromMinor };
+    const newTo = { ...to, amountMinor: toMinor };
+    if (tx.id === from.id) {
+      setTx(newFrom);
+      setSibling(newTo);
+    } else {
+      setTx(newTo);
+      setSibling(newFrom);
+    }
+    setFromText(minorToAmountInput(fromMinor, from.currency));
+    setTransferOverride(null);
+    onChangedRef.current?.();
+    hapticSuccess();
+  }, [tx, transferEdit]);
 
   const onPickDate = useCallback(
     async (date?: Date) => {
@@ -180,18 +324,88 @@ export function TransactionDetailSheet() {
       backdropComponent={renderBackdrop}
       backgroundStyle={styles.sheetBg}
       handleIndicatorStyle={styles.handle}
-      onDismiss={() => setTx(null)}
+      onDismiss={() => {
+        setTx(null);
+        setSibling(null);
+      }}
     >
       <BottomSheetScrollView contentContainerStyle={styles.detail}>
         {tx && (
           <>
             {isTransfer ? (
-              <Money
-                minor={tx.amountMinor}
-                currency={tx.currency}
-                options={{ showPlus: false }}
-                style={[styles.detailAmount, { color: palette.ink }]}
-              />
+              transferEdit ? (
+                <>
+                  {/* Source amount (from-account currency). */}
+                  <View style={styles.amountEditRow}>
+                    <BottomSheetTextInput
+                      style={[styles.detailAmount, styles.amountInput, { color: palette.ink }]}
+                      value={fromText}
+                      onChangeText={(v) => {
+                        setTransferOverride(null);
+                        setFromText(sanitizeAmountInput(v, transferEdit.fromCur));
+                      }}
+                      keyboardType="decimal-pad"
+                      placeholder={amountPlaceholder(transferEdit.fromCur)}
+                      placeholderTextColor={palette.dim2}
+                    />
+                    <Text style={styles.amountCurrency}>{transferEdit.fromCur}</Text>
+                  </View>
+                  {!transferEdit.sameCurrency && (
+                    <>
+                      <Text style={styles.sectionTitle}>{t('input.rateAndTotal')}</Text>
+                      {/* Left rate, right final, ≈ between — edit either. */}
+                      <View style={styles.crossRow}>
+                        <Text style={styles.rateHint}>1 {transferEdit.fromCur} =</Text>
+                        <BottomSheetTextInput
+                          style={styles.crossInput}
+                          value={
+                            transferOverride?.mode === 'rate'
+                              ? transferOverride.text
+                              : formatRate(transferEdit.rateE6)
+                          }
+                          onChangeText={(v) =>
+                            setTransferOverride({ mode: 'rate', text: sanitizeRateInput(v) })
+                          }
+                          keyboardType="decimal-pad"
+                          placeholderTextColor={palette.dim2}
+                        />
+                        <Text style={styles.approx}>≈</Text>
+                        <BottomSheetTextInput
+                          style={styles.crossInput}
+                          value={
+                            transferOverride?.mode === 'final'
+                              ? transferOverride.text
+                              : formatMoney(transferEdit.toMinor, transferEdit.toCur, {
+                                  hideCode: true,
+                                })
+                          }
+                          onChangeText={(v) =>
+                            setTransferOverride({
+                              mode: 'final',
+                              text: sanitizeAmountInput(v, transferEdit.toCur),
+                            })
+                          }
+                          keyboardType="decimal-pad"
+                          placeholderTextColor={palette.dim2}
+                        />
+                        <Text style={styles.amountCurrency}>{transferEdit.toCur}</Text>
+                      </View>
+                    </>
+                  )}
+                  {transferEdit.dirty && (
+                    <Pressable onPress={() => void commitTransfer()} style={styles.save}>
+                      <Text style={styles.saveText}>{t('common.save')}</Text>
+                    </Pressable>
+                  )}
+                </>
+              ) : (
+                <Money
+                  minor={tx.amountMinor}
+                  currency={tx.currency}
+                  options={{ showPlus: false }}
+                  style={[styles.detailAmount, { color: palette.ink }]}
+                />
+              )
             ) : (
               <>
                 <View style={styles.amountEditRow}>
@@ -221,14 +435,45 @@ export function TransactionDetailSheet() {
                 <Text style={styles.editHint}>{t('detail.editHint')}</Text>
               </>
             )}
+            {!isTransfer && (
+              <View style={styles.fieldRow}>
+                <Text style={styles.fieldRowLabel}>{t('detail.account')}</Text>
+                <AccountDropdown
+                  value={tx.accountId}
+                  accounts={detailAccounts}
+                  onChange={(id) => void onPickAccount(id)}
+                />
+              </View>
+            )}
+
+            {isTransfer && transferEdit && (
+              <View style={styles.fromToRow}>
+                <View style={styles.fromToCol}>
+                  <Text style={styles.sectionTitle}>{t('detail.fromAccount')}</Text>
+                  <AccountDropdown
+                    value={transferEdit.from.accountId}
+                    accounts={accounts.filter(
+                      (a) =>
+                        a.currency === transferEdit.fromCur && a.id !== transferEdit.to.accountId,
+                    )}
+                    onChange={(id) => void onPickTransferAccount('from', id)}
+                  />
+                </View>
+                <View style={styles.fromToCol}>
+                  <Text style={styles.sectionTitle}>{t('detail.toAccount')}</Text>
+                  <AccountDropdown
+                    value={transferEdit.to.accountId}
+                    accounts={accounts.filter(
+                      (a) =>
+                        a.currency === transferEdit.toCur && a.id !== transferEdit.from.accountId,
+                    )}
+                    onChange={(id) => void onPickTransferAccount('to', id)}
+                  />
+                </View>
+              </View>
+            )}
+
             <View style={styles.detailRows}>
-              <DetailRow
-                label={t('detail.account')}
-                value={displayAccountName(
-                  accounts.find((a) => a.id === tx.accountId) ?? { name: '—', isDefault: false },
-                )}
-                styles={styles}
-              />
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>{t('detail.date')}</Text>
                 <DateTimePicker
@@ -239,20 +484,24 @@ export function TransactionDetailSheet() {
                   onChange={(_, d) => void onPickDate(d)}
                 />
               </View>
-              <DetailRow
-                label={t('detail.rateToBase')}
-                value={`${(tx.rateToBaseE6 / 1_000_000).toFixed(4)} ${base}`}
-                styles={styles}
-              />
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>{t('detail.inBase')}</Text>
-                <Money
-                  minor={convertToBase(tx.amountMinor, tx.rateToBaseE6)}
-                  currency={base}
-                  options={{ showPlus: !isTransfer }}
-                  style={styles.detailValue}
-                />
-              </View>
+              {!isTransfer && (
+                <>
+                  <DetailRow
+                    label={t('detail.rateToBase')}
+                    value={`${(tx.rateToBaseE6 / 1_000_000).toFixed(4)} ${base}`}
+                    styles={styles}
+                  />
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>{t('detail.inBase')}</Text>
+                    <Money
+                      minor={convertToBase(tx.amountMinor, tx.rateToBaseE6)}
+                      currency={base}
+                      options={{ showPlus: true }}
+                      style={styles.detailValue}
+                    />
+                  </View>
+                </>
+              )}
             </View>
 
             {!isTransfer && (
@@ -330,6 +579,28 @@ const makeStyles = (p: Palette) =>
     amountSign: { fontSize: Typography.hero.fontSize, fontWeight: Typography.hero.fontWeight },
     amountInput: { marginTop: 0, textAlign: 'right', minWidth: 60, paddingVertical: 0 },
     amountCurrency: { color: p.dim, fontSize: Typography.title.fontSize, fontWeight: '600' },
+    // Cross-currency transfer edit: [1 FROM =] [rate] ≈ [final] [TO] on one line.
+    crossRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    crossInput: {
+      ...numberTextStyle,
+      flex: 1,
+      color: p.ink,
+      fontSize: Typography.headline.fontSize,
+      textAlign: 'center',
+      paddingVertical: Spacing.sm,
+      paddingHorizontal: Spacing.sm,
+      borderRadius: Radius.md,
+      backgroundColor: p.glassLightBg,
+    },
+    approx: { ...numberTextStyle, color: p.dim, fontSize: Typography.title.fontSize },
+    rateHint: { ...numberTextStyle, color: p.dim, fontSize: Typography.footnote.fontSize },
+    save: {
+      backgroundColor: p.btnBg,
+      borderRadius: Radius.inputButton,
+      paddingVertical: Spacing.md,
+      alignItems: 'center',
+    },
+    saveText: { color: p.btnInk, fontSize: Typography.headline.fontSize, fontWeight: '600' },
     detailRows: {
       backgroundColor: p.glassBg,
       borderColor: p.glassBorder,
@@ -340,8 +611,20 @@ const makeStyles = (p: Palette) =>
     detailRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
+      alignItems: 'center',
       paddingVertical: Spacing.md,
     },
+    // Account picker as a field row: label left, dropdown right.
+    fieldRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: Spacing.md,
+    },
+    fieldRowLabel: { color: p.dim, fontSize: Typography.body.fontSize },
+    // Transfer: source and destination account pickers side by side.
+    fromToRow: { flexDirection: 'row', gap: Spacing.md },
+    fromToCol: { flex: 1, gap: Spacing.xs },
     detailLabel: { color: p.dim, fontSize: Typography.body.fontSize },
     detailValue: { color: p.ink, fontSize: Typography.body.fontSize },
     sectionTitle: {

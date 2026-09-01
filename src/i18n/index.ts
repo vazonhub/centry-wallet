@@ -32,6 +32,13 @@ const getDeviceLanguageTag = (): string | undefined => {
   return locale?.split(/[-_]/)[0]?.toLowerCase();
 };
 
+/** Device region code (e.g. 'BY', 'US', 'PL') from the locale, or undefined. */
+export const getDeviceRegion = (): string | undefined => {
+  const locale = (NativeModules.I18nManager as { localeIdentifier?: string } | undefined)
+    ?.localeIdentifier;
+  return locale?.split(/[-_]/)[1]?.toUpperCase();
+};
+
 /** Maps the device locale to a supported language: Russian → 'ru', else 'en'. */
 export const getSystemLanguage = (): LanguageChoice => {
   const tag = getDeviceLanguageTag();

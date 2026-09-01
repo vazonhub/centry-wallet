@@ -3,7 +3,8 @@ import { createRef } from 'react';
 import type { Transaction } from '@models';
 
 export interface TransactionDetailHandle {
-  open(tx: Transaction, onChanged?: () => void): void;
+  /** `sibling` is the other leg of a transfer (so the sheet can edit both). */
+  open(tx: Transaction, onChanged?: () => void, sibling?: Transaction): void;
 }
 
 /**
@@ -15,6 +16,10 @@ export interface TransactionDetailHandle {
  */
 export const transactionDetailRef = createRef<TransactionDetailHandle>();
 
-export function openTransactionDetail(tx: Transaction, onChanged?: () => void): void {
-  transactionDetailRef.current?.open(tx, onChanged);
+export function openTransactionDetail(
+  tx: Transaction,
+  onChanged?: () => void,
+  sibling?: Transaction,
+): void {
+  transactionDetailRef.current?.open(tx, onChanged, sibling);
 }

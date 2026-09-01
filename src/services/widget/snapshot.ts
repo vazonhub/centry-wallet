@@ -10,7 +10,7 @@ import { computeAllowance } from '@utils/summary';
  */
 
 /** How many recent entries the medium widget shows. */
-export const WIDGET_RECENT_LIMIT = 3;
+export const WIDGET_RECENT_LIMIT = 6;
 
 export interface WidgetAccountSnapshot {
   name: string;
@@ -38,6 +38,12 @@ export interface WidgetSnapshot {
   periodRemainingMinor: number;
   /** Human period label for the widget, e.g. "месяц" / "неделя". */
   periodLabel: string;
+  /** Localized static UI strings (the widget can't run i18n itself). */
+  allowanceTitle: string;
+  spentLabel: string;
+  /** Localized "for the {period}" prefix for the period-remaining line. */
+  forPeriodLabel: string;
+  emptyLabel: string;
   accounts: WidgetAccountSnapshot[];
   recent: WidgetRecentSnapshot[];
   /** Epoch seconds when this snapshot was built. */
@@ -58,6 +64,11 @@ export interface BuildSnapshotInput {
   now: Date;
   /** Localized period word for the widget ("месяц" / "month"). */
   periodLabel: string;
+  /** Localized static UI strings (see WidgetSnapshot). */
+  allowanceTitle: string;
+  spentLabel: string;
+  forPeriodLabel: string;
+  emptyLabel: string;
   /** Localized "transfer" label for feed rows. */
   transferLabel: string;
   /** Localized "no category" fallback for feed rows. */
@@ -130,6 +141,10 @@ export function buildWidgetSnapshot(input: BuildSnapshotInput): WidgetSnapshot {
     todaySpentMinor,
     periodRemainingMinor,
     periodLabel: input.periodLabel,
+    allowanceTitle: input.allowanceTitle,
+    spentLabel: input.spentLabel,
+    forPeriodLabel: input.forPeriodLabel,
+    emptyLabel: input.emptyLabel,
     accounts,
     recent,
     updatedAt: Math.floor(input.now.getTime() / 1000),

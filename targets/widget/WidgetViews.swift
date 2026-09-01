@@ -26,7 +26,7 @@ private struct HeroBlock: View {
   let snapshot: CentrySnapshot
   var body: some View {
     VStack(alignment: .leading, spacing: 2) {
-      Text("МОЖНО СЕГОДНЯ")
+      Text(snapshot.allowanceTitle)
         .font(.system(size: 10, weight: .semibold))
         .tracking(0.8)
         .foregroundStyle(Palette.dim)
@@ -39,7 +39,7 @@ private struct HeroBlock: View {
           Palette.heroColor(perDayMinor: snapshot.perDayMinor,
                             todaySpentMinor: snapshot.todaySpentMinor)
         )
-      Text("потрачено \(Money.format(snapshot.todaySpentMinor)) \(snapshot.currency)")
+      Text("\(snapshot.spentLabel) \(Money.format(snapshot.todaySpentMinor)) \(snapshot.currency)")
         .font(.system(size: 11))
         .foregroundStyle(Palette.dim)
         .lineLimit(1)
@@ -52,7 +52,7 @@ private struct RecentRow: View {
   let item: WidgetRecent
   var body: some View {
     HStack(spacing: 6) {
-      Text(item.note.isEmpty ? "Без категории" : item.note)
+      Text(item.note)
         .font(.system(size: 12))
         .foregroundStyle(Palette.ink)
         .lineLimit(1)
@@ -70,7 +70,7 @@ private struct RecentRow: View {
 private struct PeriodRemaining: View {
   let snapshot: CentrySnapshot
   var body: some View {
-    Text("на \(snapshot.periodLabel): \(Money.format(snapshot.periodRemainingMinor)) \(snapshot.currency)")
+    Text("\(snapshot.forPeriodLabel): \(Money.format(snapshot.periodRemainingMinor)) \(snapshot.currency)")
       .font(.system(size: 10))
       .foregroundStyle(Palette.dim)
       .lineLimit(1)
@@ -106,9 +106,10 @@ struct MediumWidgetView: View {
       .frame(maxWidth: .infinity, alignment: .leading)
 
       // Right: recent entries, vertically centered with a little extra inset.
-      VStack(alignment: .leading, spacing: 6) {
+      // Tight spacing so up to WIDGET_RECENT_LIMIT (6) rows fit the medium size.
+      VStack(alignment: .leading, spacing: 4) {
         if snapshot.recent.isEmpty {
-          Text("Нет записей")
+          Text(snapshot.emptyLabel)
             .font(.system(size: 12))
             .foregroundStyle(Palette.dim)
         } else {

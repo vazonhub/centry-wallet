@@ -2,32 +2,31 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { commonCurrencies } from '@constants/currencies';
+import { AppIcon } from '@components/AppIcon';
 import { usePalette } from '@hooks/usePalette';
+import type { Account } from '@models';
 import type { Palette } from '@theme';
 import { Radius, Spacing, Typography } from '@theme';
-import { currencyName } from '@utils/displayName';
+import { displayAccountName } from '@utils/displayName';
 import { hapticLight } from '@utils/haptics';
 
 interface Props {
-  value: string;
-  onChange: (code: string) => void;
+  value: string | null;
+  accounts: Account[];
+  onChange: (accountId: string) => void;
 }
 
 /**
- * Currency picker as an expanding dropdown. The open list is an ABSOLUTE overlay
- * (top: 100%) so it never reflows the surrounding layout — the amount field next
- * to it no longer jumps when the list opens. The container is z-elevated while
- * open so the floating list paints above later siblings; the list is scrollable
- * and height-capped so it stays on-screen on a real device. Lists the common
- * currencies (B7 — any ISO code works, this is just the shortlist).
+ * Account picker as an expanding dropdown (mirrors {@link CurrencyDropdown}). The
+ * open list is an ABSOLUTE overlay so it floats over following content instead of
+ * reflowing it. The caller passes the eligible accounts (already filtered by the
+ * required currency).
  */
-export function CurrencyDropdown({ value, onChange }: Props) {
+export function AccountDropdown({ value, accounts, onChange }: Props) {
   const palette = usePalette();
-  const styles = makeStyles(palette);
+  const styles = useMemo(() => makeStyles(palette), [palette]);
   const [open, setOpen] = useState(false);
-  const currencies = useMemo(() => commonCurrencies(), []);
-  const selected = currencies.find((c) => c.code === value);
+  const selected = accounts.find((a) => a.id === value);
 
   return (
     <View style={[styles.root, open && styles.rootOpen]}>
@@ -39,11 +38,15 @@ export function CurrencyDropdown({ value, onChange }: Props) {
         }}
         accessibilityRole="button"
       >
-        <Text style={styles.fieldText} numberOfLines={1}>
-          {value}
-          {selected ? ` · ${currencyName(selected.code)}` : ''}
-        </Text>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={palette.dim} />
+        <View style={styles.fieldLeft}>
+          {selected && (
+            <AppIcon name={selected.icon} color={palette.dim} size={16} fallback="wallet-outline" />
+          )}
+          <Text style={styles.fieldText} numberOfLines={1}>
+            {selected ? displayAccountName(selected) : '—'}
+          </Text>
+        </View>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={palette.dim} />
       </Pressable>
       {open && (
         <View style={styles.list}>
@@ -53,22 +56,33 @@ export function CurrencyDropdown({ value, onChange }: Props) {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {currencies.map((c) => {
-              const active = c.code === value;
+            {accounts.map((a) => {
+              const active = a.id === value;
               return (
                 <Pressable
-                  key={c.code}
+                  key={a.id}
                   style={styles.item}
                   onPress={() => {
-                    onChange(c.code);
+                    onChange(a.id);
                     setOpen(false);
                     hapticLight();
                   }}
                 >
-                  <Text style={[styles.itemText, active && styles.itemTextActive]}>
-                    {c.code} · {currencyName(c.code)}
-                  </Text>
-                  {active && <Ionicons name="checkmark" size={18} color={palette.accent} />}
+                  <View style={styles.fieldLeft}>
+                    <AppIcon
+                      name={a.icon}
+                      color={active ? palette.accent : palette.dim}
+                      size={16}
+                      fallback="wallet-outline"
+                    />
+                    <Text
+                      style={[styles.itemText, active && styles.itemTextActive]}
+                      numberOfLines={1}
+                    >
+                      {displayAccountName(a)}
+                    </Text>
+                  </View>
+                  {active && <Ionicons name="checkmark" size={16} color={palette.accent} />}
                 </Pressable>
               );
             })}
@@ -81,31 +95,29 @@ export function CurrencyDropdown({ value, onChange }: Props) {
 
 const makeStyles = (p: Palette) =>
   StyleSheet.create({
-    // Relative anchor for the absolute list; z-elevated while open so the
-    // floating list paints above sibling fields below it.
-    root: { position: 'relative' },
+    root: { position: 'relative', flexShrink: 1, minWidth: 140 },
     rootOpen: { zIndex: 1000 },
     field: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       gap: Spacing.sm,
-      paddingVertical: Spacing.md,
-      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.sm,
+      paddingHorizontal: Spacing.md,
       borderRadius: Radius.md,
       backgroundColor: p.glassLightBg,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: p.glassLightBorder,
     },
+    fieldLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, flexShrink: 1 },
     fieldText: { flexShrink: 1, color: p.ink, fontSize: Typography.body.fontSize },
     list: {
       position: 'absolute',
       top: '100%',
-      left: 0,
       right: 0,
+      minWidth: 180,
       marginTop: Spacing.xs,
       borderRadius: Radius.md,
-      // Opaque surface so content underneath doesn't show through the overlay.
       backgroundColor: p.sheetBg,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: p.glassBorder,
@@ -117,14 +129,15 @@ const makeStyles = (p: Palette) =>
       shadowRadius: 12,
       shadowOffset: { width: 0, height: 6 },
     },
-    listScroll: { maxHeight: 240 },
+    listScroll: { maxHeight: 220 },
     item: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
+      gap: Spacing.sm,
       paddingVertical: Spacing.md,
       paddingHorizontal: Spacing.lg,
     },
-    itemText: { color: p.dim, fontSize: Typography.body.fontSize },
+    itemText: { color: p.dim, fontSize: Typography.body.fontSize, flexShrink: 1 },
     itemTextActive: { color: p.ink, fontWeight: '600' },
   });

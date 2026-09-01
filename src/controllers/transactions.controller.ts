@@ -4,7 +4,7 @@ import type { Account, Id } from '@models';
 import { getRateForNewTransaction } from '@services/rates';
 import { useSettingsStore } from '@stores/settings.store';
 import { currentTzOffsetMin, nowSec } from '@utils/date';
-import { localDay } from '@utils/money';
+import { applyCrossRate, convertToBase, deriveRateToBaseE6, localDay } from '@utils/money';
 import { buildTransaction, buildTransferPair, type TransactionDraft } from '@utils/transaction';
 import { uuid } from '@utils/uuid';
 
@@ -85,6 +85,37 @@ export interface UpdateAccountInput {
   openingMinor: number;
 }
 
+/**
+ * Switches an account to a new currency at the given from→to rate (×1e6). Every
+ * transaction on the account and its opening balance are converted to the new
+ * currency; each transaction's base value is preserved (its rate_to_base is
+ * re-derived) so History/stats totals don't move. Rewrites frozen rates
+ * (rule 2) — a deliberate, warned action. No-op if the currency is unchanged.
+ */
+async function changeAccountCurrency(id: Id, newCurrency: string, rateE6: number): Promise<void> {
+  const account = await AccountsRepo.getAccount(id);
+  if (!account || account.currency === newCurrency || rateE6 <= 0) return;
+  const oldCurrency = account.currency;
+
+  const txs = await TransactionsRepo.listTransactionsForAccount(id);
+  const newOpeningMinor = applyCrossRate(account.openingMinor, oldCurrency, rateE6, newCurrency);
+  const txUpdates = txs.map((t) => {
+    const amountMinor = applyCrossRate(t.amountMinor, oldCurrency, rateE6, newCurrency);
+    // Keep the base-currency value identical: re-derive the rate for the new amount.
+    const baseMinor = convertToBase(t.amountMinor, t.rateToBaseE6);
+    return { id: t.id, amountMinor, rateToBaseE6: deriveRateToBaseE6(amountMinor, baseMinor) };
+  });
+
+  await TransactionsRepo.convertAccountCurrency(
+    id,
+    newCurrency,
+    newOpeningMinor,
+    txUpdates,
+    nowSec(),
+  );
+  await DataController.loadAll();
+}
+
 /** Edits an account's name / kind / opening balance (currency is fixed — see repo). */
 async function updateAccount(id: Id, input: UpdateAccountInput): Promise<void> {
   await AccountsRepo.updateAccount(
@@ -122,6 +153,16 @@ async function deleteAccount(id: Id): Promise<void> {
   if (useSettingsStore.getState().lastAccountId === id) {
     useSettingsStore.getState().setLastAccountId(null);
   }
+  await DataController.loadAll();
+}
+
+/**
+ * Persists a user-defined account order (drag-and-drop on Home / Settings). Only
+ * the visible active accounts are passed; `sort_order` is rewritten to match,
+ * then the store + widget snapshot refresh through the single funnel.
+ */
+async function reorderAccounts(orderedIds: Id[]): Promise<void> {
+  await AccountsRepo.reorderAccounts(orderedIds, nowSec());
   await DataController.loadAll();
 }
 
@@ -167,12 +208,41 @@ async function addTransfer(input: AddTransferInput): Promise<void> {
   await DataController.loadAll();
 }
 
-/** Edits a transaction's category/note. */
+/** Edits a transaction's category/note. For transfers the note syncs both legs. */
 async function editTransactionMeta(
   id: Id,
   fields: { categoryId?: Id | null; note?: string | null },
 ): Promise<void> {
-  await TransactionsRepo.updateTransactionMeta(id, fields, nowSec());
+  const now = nowSec();
+  const tx = await TransactionsRepo.getTransaction(id);
+  if (tx?.transferPairId && 'note' in fields) {
+    // Transfers have no category; only the shared note applies, to both legs.
+    await TransactionsRepo.updateTransferNote(tx.transferPairId, fields.note ?? null, now);
+  } else {
+    await TransactionsRepo.updateTransactionMeta(id, fields, now);
+  }
+  await DataController.loadAll();
+}
+
+/**
+ * Edits a cross-account transfer's amounts (B12): the source magnitude out of the
+ * from-account and the destination magnitude into the to-account. Both legs are
+ * updated together so neither account's balance is left skewed; the from→to rate
+ * is implied by the two amounts (no separate rate column). Frozen base rates are
+ * currency→base and amount-independent, so they are untouched (rule 2).
+ */
+async function editTransfer(
+  pairId: Id,
+  amounts: { fromMinorAbs: number; toMinorAbs: number },
+): Promise<void> {
+  const legs = await TransactionsRepo.listTransferLegs(pairId);
+  const fromLeg = legs.find((l) => l.amountMinor < 0);
+  const toLeg = legs.find((l) => l.amountMinor > 0);
+  if (!fromLeg || !toLeg) return;
+  if (amounts.fromMinorAbs <= 0 || amounts.toMinorAbs <= 0) return;
+  const now = nowSec();
+  await TransactionsRepo.updateTransactionAmount(fromLeg.id, -Math.abs(amounts.fromMinorAbs), now);
+  await TransactionsRepo.updateTransactionAmount(toLeg.id, Math.abs(amounts.toMinorAbs), now);
   await DataController.loadAll();
 }
 
@@ -191,10 +261,57 @@ async function editTransactionAmount(
   await DataController.loadAll();
 }
 
-/** Moves a transaction to another date (recomputes its local_day, rule 8). */
+/**
+ * Moves a transaction to another account. Only same-currency moves are allowed
+ * (the target must match the transaction's currency, since account balances sum
+ * amounts without conversion). Not for transfers — their two legs are bound to
+ * specific accounts. Throws on a currency mismatch.
+ */
+async function editTransactionAccount(id: Id, accountId: Id): Promise<void> {
+  const tx = await TransactionsRepo.getTransaction(id);
+  if (!tx || tx.transferPairId) return;
+  const account = await AccountsRepo.getAccount(accountId);
+  if (!account) return;
+  if (account.currency !== tx.currency) {
+    throw new Error('Cannot move a transaction to an account in a different currency.');
+  }
+  await TransactionsRepo.updateTransactionAccount(id, accountId, nowSec());
+  await DataController.loadAll();
+}
+
+/**
+ * Reassigns one leg of a transfer to another account of the SAME currency (the
+ * leg's amount is in that currency; a different currency would corrupt balances).
+ * The two legs must stay on different accounts. Throws on a currency mismatch.
+ */
+async function editTransferAccount(pairId: Id, side: 'from' | 'to', accountId: Id): Promise<void> {
+  const legs = await TransactionsRepo.listTransferLegs(pairId);
+  const fromLeg = legs.find((l) => l.amountMinor < 0);
+  const toLeg = legs.find((l) => l.amountMinor > 0);
+  const leg = side === 'from' ? fromLeg : toLeg;
+  const other = side === 'from' ? toLeg : fromLeg;
+  if (!leg || !other) return;
+  if (accountId === other.accountId || accountId === leg.accountId) return;
+  const account = await AccountsRepo.getAccount(accountId);
+  if (!account) return;
+  if (account.currency !== leg.currency) {
+    throw new Error('Cannot move a transfer leg to an account in a different currency.');
+  }
+  await TransactionsRepo.updateTransactionAccount(leg.id, accountId, nowSec());
+  await DataController.loadAll();
+}
+
+/** Moves a transaction to another date (recomputes its local_day, rule 8). For
+ * transfers both legs move together so they stay grouped on the same day. */
 async function editTransactionDate(id: Id, occurredAtSec: number): Promise<void> {
   const day = localDay(occurredAtSec, currentTzOffsetMin());
-  await TransactionsRepo.updateTransactionDate(id, occurredAtSec, day, nowSec());
+  const now = nowSec();
+  const tx = await TransactionsRepo.getTransaction(id);
+  if (tx?.transferPairId) {
+    await TransactionsRepo.updateTransferDate(tx.transferPairId, occurredAtSec, day, now);
+  } else {
+    await TransactionsRepo.updateTransactionDate(id, occurredAtSec, day, now);
+  }
   await DataController.loadAll();
 }
 
@@ -216,9 +333,14 @@ export const TransactionsController = {
   addTransfer,
   createAccount,
   updateAccount,
+  changeAccountCurrency,
   deleteAccount,
+  reorderAccounts,
   editTransactionMeta,
   editTransactionAmount,
+  editTransactionAccount,
+  editTransfer,
+  editTransferAccount,
   editTransactionDate,
   deleteTransaction,
 };

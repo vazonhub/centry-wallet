@@ -23,6 +23,8 @@ export interface InputPrefill {
   kind?: TransactionKind;
   amount?: string;
   note?: string;
+  /** Target account (Siri): preselects it so the amount uses its currency. */
+  accountId?: string;
 }
 
 let pendingPrefill: InputPrefill | null = null;

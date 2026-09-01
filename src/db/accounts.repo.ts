@@ -117,6 +117,25 @@ export async function updateAccount(
   );
 }
 
+/**
+ * Persists a new account ordering. `orderedIds` is the full visible order; each
+ * account's `sort_order` is rewritten to its index in the array inside a single
+ * transaction (rule 10: `updated_at` bumped so the change is sync-visible).
+ * Accounts not in the list (e.g. archived) keep their existing `sort_order`.
+ */
+export async function reorderAccounts(orderedIds: Id[], updatedAt: number): Promise<void> {
+  const db = getDb();
+  await db.withTransactionAsync(async () => {
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.runAsync(`UPDATE accounts SET sort_order = ?, updated_at = ? WHERE id = ?;`, [
+        i,
+        updatedAt,
+        orderedIds[i] as string,
+      ]);
+    }
+  });
+}
+
 /** Makes `id` the single default account (clears the flag on all others). */
 export async function setDefaultAccount(id: Id, updatedAt: number): Promise<void> {
   const db = getDb();

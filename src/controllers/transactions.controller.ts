@@ -125,6 +125,16 @@ async function deleteAccount(id: Id): Promise<void> {
   await DataController.loadAll();
 }
 
+/**
+ * Persists a user-defined account order (drag-and-drop on Home / Settings). Only
+ * the visible active accounts are passed; `sort_order` is rewritten to match,
+ * then the store + widget snapshot refresh through the single funnel.
+ */
+async function reorderAccounts(orderedIds: Id[]): Promise<void> {
+  await AccountsRepo.reorderAccounts(orderedIds, nowSec());
+  await DataController.loadAll();
+}
+
 export interface AddTransferInput {
   fromAccountId: Id;
   fromCurrency: string;
@@ -217,6 +227,7 @@ export const TransactionsController = {
   createAccount,
   updateAccount,
   deleteAccount,
+  reorderAccounts,
   editTransactionMeta,
   editTransactionAmount,
   editTransactionDate,

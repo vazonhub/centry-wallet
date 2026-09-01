@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
   BottomSheetBackdrop,
   BottomSheetModal,
@@ -17,14 +18,24 @@ import { useDataStore } from '@stores/data.store';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
 import { numberTextStyle, Radius, Spacing, Typography } from '@theme';
-import type { BalancePoint } from '@utils/balanceHistory';
+import type { BalancePoint, TxBalancePoint } from '@utils/balanceHistory';
 import { displayAccountName } from '@utils/displayName';
+import { hapticLight } from '@utils/haptics';
 import { convertToBase } from '@utils/money';
 import { totalBalanceBaseMinor } from '@utils/summary';
 
 const E6_ONE = 1_000_000;
 const CHART_DAYS = 30;
 const CHART_HEIGHT = 120;
+
+type ChartMode = 'byDay' | 'byTx';
+
+/** A single plotted bar — unified across the by-day and by-transaction modes. */
+interface ChartPoint {
+  key: string;
+  value: number;
+  caption: string;
+}
 
 /**
  * Wallet-total sheet — how "всего денег" is made up (per-account breakdown
@@ -42,12 +53,14 @@ export function WalletTotalSheet() {
   const base = useSettingsStore((s) => s.baseCurrency);
 
   const [series, setSeries] = useState<BalancePoint[]>([]);
+  const [txSeries, setTxSeries] = useState<TxBalancePoint[]>([]);
+  const [chartMode, setChartMode] = useState<ChartMode>('byDay');
   const [open, setOpen] = useState(false);
   // Accounts excluded from the stats (empty = all counted). New accounts default
   // to counted; toggling an account off recomputes the total + chart without it.
   const [disabled, setDisabled] = useState<Set<string>>(new Set());
-  // The day the user tapped on the chart, or null for the whole-window summary.
-  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  // The bar (day or transaction) the user tapped, or null for the window summary.
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
   const enabledAccounts = useMemo(
     () => accounts.filter((a) => !disabled.has(a.id)),
@@ -61,22 +74,49 @@ export function WalletTotalSheet() {
 
   const rateOf = (currency: string) => (currency === base ? E6_ONE : (rates[currency] ?? E6_ONE));
 
-  // Recompute the chart whenever the sheet is open and the account selection (or
-  // the account list) changes.
+  // Recompute the chart whenever the sheet is open and the account selection, the
+  // account list, or the chart mode changes. Only the active mode's series is
+  // fetched (the other stays as-is until switched to).
   useEffect(() => {
     if (!open) return;
     const ids = enabledAccounts.map((a) => a.id);
-    void StatsController.getBalanceSeries(CHART_DAYS, ids).then(setSeries);
-  }, [open, enabledAccounts]);
+    if (chartMode === 'byTx') {
+      void StatsController.getTransactionSeries(CHART_DAYS, ids).then(setTxSeries);
+    } else {
+      void StatsController.getBalanceSeries(CHART_DAYS, ids).then(setSeries);
+    }
+  }, [open, enabledAccounts, chartMode]);
+
+  // Unified plot points for whichever mode is active (both key their caption to
+  // the day; the by-tx mode just has one point per transaction).
+  const chartPoints = useMemo<ChartPoint[]>(() => {
+    if (chartMode === 'byTx') {
+      return txSeries.map((p) => ({
+        key: `t${p.index}`,
+        value: p.totalBaseMinor,
+        caption: formatDayShort(p.day),
+      }));
+    }
+    return series.map((p) => ({
+      key: p.day,
+      value: p.totalBaseMinor,
+      caption: formatDayShort(p.day),
+    }));
+  }, [chartMode, series, txSeries]);
+
+  const changeCaption =
+    chartMode === 'byTx'
+      ? t('walletTotal.overTx', { n: chartPoints.length })
+      : t('walletTotal.overDays', { n: chartPoints.length });
 
   const onChange = useCallback((index: number) => {
     const isOpen = index >= 0;
     setOpen(isOpen);
-    if (!isOpen) setSelectedDay(null);
+    if (!isOpen) setSelectedKey(null);
   }, []);
 
   const toggleAccount = useCallback((id: string) => {
-    setSelectedDay(null);
+    setSelectedKey(null);
     setDisabled((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -85,8 +125,13 @@ export function WalletTotalSheet() {
     });
   }, []);
 
-  const onSelectDay = useCallback((day: string) => {
-    setSelectedDay((prev) => (prev === day ? null : day));
+  const onSelectKey = useCallback((key: string) => {
+    setSelectedKey((prev) => (prev === key ? null : key));
+  }, []);
+
+  const onModeChange = useCallback((mode: ChartMode) => {
+    setSelectedKey(null);
+    setChartMode(mode);
   }, []);
 
   const renderBackdrop = (props: BottomSheetBackdropProps) => (
@@ -115,13 +160,24 @@ export function WalletTotalSheet() {
           minimumFontScale={0.6}
         />
 
+        <View style={styles.chartControls}>
+          <ChartModeDropdown
+            mode={chartMode}
+            onChange={onModeChange}
+            palette={palette}
+            styles={styles}
+            t={t}
+          />
+        </View>
+
         <BalanceChart
-          series={series}
+          points={chartPoints}
           base={base}
           palette={palette}
           styles={styles}
-          selectedDay={selectedDay}
-          onSelectDay={onSelectDay}
+          selectedKey={selectedKey}
+          onSelectKey={onSelectKey}
+          changeCaption={changeCaption}
           t={t}
         />
 
@@ -170,38 +226,50 @@ export function WalletTotalSheet() {
 }
 
 interface ChartProps {
-  series: BalancePoint[];
+  points: ChartPoint[];
   base: string;
   palette: Palette;
   styles: ReturnType<typeof makeStyles>;
-  selectedDay: string | null;
-  onSelectDay: (day: string) => void;
+  selectedKey: string | null;
+  onSelectKey: (key: string) => void;
+  /** Caption for the window net-change (e.g. "over 30 d." / "over 42 tx."). */
+  changeCaption: string;
   t: ReturnType<typeof useTranslation>['t'];
 }
 
-/** 'YYYY-MM-DD' → 'DD.MM' for the selected-day caption. */
+/** 'YYYY-MM-DD' → 'DD.MM' for the selected-bar caption. */
 function formatDayShort(day: string): string {
   const [, m, d] = day.split('-');
   return d && m ? `${d}.${m}` : day;
 }
 
 /**
- * Dependency-free bar chart of the daily wallet total. Bars are scaled to the
- * window's own min/max (every day fits — the tallest reaches full height, the
- * shortest a 4px floor, so no day is clipped). Tapping a bar selects that day
- * and shows its balance; the header otherwise shows the window's net change.
+ * Dependency-free bar chart of the wallet total — one bar per day or (in by-tx
+ * mode) per transaction. Bars are scaled to the window's own min/max (every bar
+ * fits — the tallest reaches full height, the shortest a 4px floor, so nothing is
+ * clipped). Tapping a bar selects it and shows its balance; the header otherwise
+ * shows the window's net change.
  */
-function BalanceChart({ series, base, palette, styles, selectedDay, onSelectDay, t }: ChartProps) {
-  if (series.length < 2) return <View style={styles.chartPlaceholder} />;
+function BalanceChart({
+  points,
+  base,
+  palette,
+  styles,
+  selectedKey,
+  onSelectKey,
+  changeCaption,
+  t,
+}: ChartProps) {
+  if (points.length < 2) return <View style={styles.chartPlaceholder} />;
 
-  const values = series.map((p) => p.totalBaseMinor);
+  const values = points.map((p) => p.value);
   const max = Math.max(...values);
   const min = Math.min(...values);
   const range = max - min;
-  const first = series[0]?.totalBaseMinor ?? 0;
-  const last = series[series.length - 1]?.totalBaseMinor ?? 0;
+  const first = points[0]?.value ?? 0;
+  const last = points[points.length - 1]?.value ?? 0;
   const change = last - first;
-  const selected = selectedDay ? series.find((p) => p.day === selectedDay) : undefined;
+  const selected = selectedKey ? points.find((p) => p.key === selectedKey) : undefined;
 
   return (
     <View style={styles.chartWrap}>
@@ -211,11 +279,11 @@ function BalanceChart({ series, base, palette, styles, selectedDay, onSelectDay,
           {selected ? (
             <>
               <Money
-                minor={selected.totalBaseMinor}
+                minor={selected.value}
                 currency={base}
                 style={[styles.chartChangeText, { color: palette.ink }]}
               />
-              <Text style={styles.chartChangeHint}>{formatDayShort(selected.day)}</Text>
+              <Text style={styles.chartChangeHint}>{selected.caption}</Text>
             </>
           ) : (
             <>
@@ -225,28 +293,26 @@ function BalanceChart({ series, base, palette, styles, selectedDay, onSelectDay,
                 options={{ showPlus: true }}
                 style={[styles.chartChangeText, { color: change >= 0 ? palette.pos : palette.neg }]}
               />
-              <Text style={styles.chartChangeHint}>
-                {t('walletTotal.overDays', { n: series.length })}
-              </Text>
+              <Text style={styles.chartChangeHint}>{changeCaption}</Text>
             </>
           )}
         </View>
       </View>
       <View style={styles.chartBars}>
-        {series.map((p, i) => {
-          const frac = range > 0 ? (p.totalBaseMinor - min) / range : 0.5;
+        {points.map((p, i) => {
+          const frac = range > 0 ? (p.value - min) / range : 0.5;
           const h = 4 + frac * (CHART_HEIGHT - 4);
-          const isLast = i === series.length - 1;
-          // When a day is selected, only that bar is highlighted; otherwise the
-          // latest day (which equals the shown wallet total) is highlighted.
-          const highlighted = selectedDay ? p.day === selectedDay : isLast;
+          const isLast = i === points.length - 1;
+          // When a bar is selected, only that one is highlighted; otherwise the
+          // latest bar (which equals the shown wallet total) is highlighted.
+          const highlighted = selectedKey ? p.key === selectedKey : isLast;
           return (
             <Pressable
-              key={p.day}
+              key={p.key}
               style={styles.chartBarWrap}
-              onPress={() => onSelectDay(p.day)}
+              onPress={() => onSelectKey(p.key)}
               accessibilityRole="button"
-              accessibilityLabel={t('walletTotal.balanceOnA11y', { day: formatDayShort(p.day) })}
+              accessibilityLabel={t('walletTotal.balanceOnA11y', { day: p.caption })}
             >
               <View
                 style={[
@@ -259,6 +325,64 @@ function BalanceChart({ series, base, palette, styles, selectedDay, onSelectDay,
         })}
       </View>
       <Money minor={min} currency={base} style={styles.chartAxis} />
+    </View>
+  );
+}
+
+interface DropdownProps {
+  mode: ChartMode;
+  onChange: (mode: ChartMode) => void;
+  palette: Palette;
+  styles: ReturnType<typeof makeStyles>;
+  t: ReturnType<typeof useTranslation>['t'];
+}
+
+/**
+ * Compact chart-mode dropdown (by day / by transaction), mirroring the app's
+ * CurrencyDropdown idiom: a pill field with a chevron whose open list is an
+ * ABSOLUTE overlay so it floats over the chart instead of reflowing it.
+ */
+function ChartModeDropdown({ mode, onChange, palette, styles, t }: DropdownProps) {
+  const [open, setOpen] = useState(false);
+  const labelOf = (m: ChartMode) =>
+    m === 'byTx' ? t('walletTotal.chartByTx') : t('walletTotal.chartByDay');
+
+  return (
+    <View style={[styles.ddRoot, open && styles.ddRootOpen]}>
+      <Pressable
+        style={styles.ddField}
+        onPress={() => {
+          setOpen((o) => !o);
+          hapticLight();
+        }}
+        accessibilityRole="button"
+      >
+        <Text style={styles.ddFieldText}>{labelOf(mode)}</Text>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color={palette.dim} />
+      </Pressable>
+      {open && (
+        <View style={styles.ddList}>
+          {(['byDay', 'byTx'] as const).map((m) => {
+            const active = m === mode;
+            return (
+              <Pressable
+                key={m}
+                style={styles.ddItem}
+                onPress={() => {
+                  onChange(m);
+                  setOpen(false);
+                  hapticLight();
+                }}
+              >
+                <Text style={[styles.ddItemText, active && styles.ddItemTextActive]}>
+                  {labelOf(m)}
+                </Text>
+                {active && <Ionicons name="checkmark" size={16} color={palette.accent} />}
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 }
@@ -334,4 +458,49 @@ const makeStyles = (p: Palette) =>
     },
     chartBarWrap: { flex: 1, height: CHART_HEIGHT, justifyContent: 'flex-end' },
     chartBar: { width: '100%', borderRadius: 2, minHeight: 4 },
+    // Chart-mode dropdown — right-aligned above the chart. The open list floats
+    // (absolute) so it never pushes the chart down.
+    chartControls: { flexDirection: 'row', justifyContent: 'flex-end', zIndex: 1000 },
+    ddRoot: { position: 'relative', minWidth: 168 },
+    ddRootOpen: { zIndex: 1000 },
+    ddField: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: Spacing.sm,
+      paddingVertical: Spacing.sm,
+      paddingHorizontal: Spacing.md,
+      borderRadius: Radius.md,
+      backgroundColor: p.glassLightBg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: p.glassLightBorder,
+    },
+    ddFieldText: { flexShrink: 1, color: p.ink, fontSize: Typography.footnote.fontSize },
+    ddList: {
+      position: 'absolute',
+      top: '100%',
+      left: 0,
+      right: 0,
+      marginTop: Spacing.xs,
+      borderRadius: Radius.md,
+      backgroundColor: p.sheetBg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: p.glassBorder,
+      overflow: 'hidden',
+      zIndex: 1000,
+      elevation: 12,
+      shadowColor: p.glassShadow,
+      shadowOpacity: 1,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 6 },
+    },
+    ddItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingVertical: Spacing.md,
+      paddingHorizontal: Spacing.md,
+    },
+    ddItemText: { color: p.dim, fontSize: Typography.footnote.fontSize },
+    ddItemTextActive: { color: p.ink, fontWeight: '600' },
   });

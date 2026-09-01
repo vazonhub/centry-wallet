@@ -15,11 +15,13 @@ import { useTranslation } from 'react-i18next';
 
 import { AppIcon } from '@components/AppIcon';
 import { openAccountSheet } from '@components/accountSheetRef';
+import { DragSortList } from '@components/DragSortList';
 import { openBudgetSheet } from '@components/budgetSheetRef';
 import { openInputSheet } from '@components/inputSheetRef';
 import { openWalletTotal } from '@components/walletTotalRef';
 import { Money } from '@components/Money';
 import { openTransactionDetail } from '@components/transactionDetailRef';
+import { TransactionsController } from '@controllers/transactions.controller';
 import { EXPENSE_FALLBACK_ICON, INCOME_FALLBACK_ICON, TRANSFER_ICON } from '@constants/icons';
 import { usePalette } from '@hooks/usePalette';
 import type { Transaction } from '@models';
@@ -47,9 +49,6 @@ const COLLAPSE_DURATION = 220;
  * and re-expand — a flip-flop loop (same guard as the History screen).
  */
 const COLLAPSE_MIN_SCROLL = 180;
-
-/** Pressable that participates in Reanimated layout animations (for the chips). */
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 /** Net change of a day in base minor units (transfers excluded — internal moves). */
 function dayNetBaseMinor(txs: Transaction[]): number {
@@ -89,6 +88,8 @@ export function HomeScreen() {
   // scrolls (mirrors the History screen). Gated on real scrollable room so it
   // can never flip-flop when there is barely anything to scroll.
   const [collapsed, setCollapsed] = useState(false);
+  // Freeze the chips scroller while an account chip is being dragged.
+  const [chipsDragging, setChipsDragging] = useState(false);
   const contentH = useRef(0);
   const viewportH = useRef(0);
 
@@ -367,65 +368,76 @@ export function HomeScreen() {
             </Animated.View>
           </Pressable>
 
-          {/* Account blocks — horizontal scroll, add button at the end */}
+          {/* Account blocks — horizontal scroll (frozen mid-drag), add at the end.
+              Long-press a chip to reorder; a quick tap still opens its sheet. */}
           <ScrollView
             horizontal
+            scrollEnabled={!chipsDragging}
             showsHorizontalScrollIndicator={false}
             style={styles.chipsScroll}
             contentContainerStyle={styles.chipsRow}
           >
-            {accounts.map((a) => (
-              <AnimatedPressable
-                key={a.id}
-                layout={LinearTransition.duration(COLLAPSE_DURATION)}
-                style={[styles.accountChip, collapsed && styles.accountChipCollapsed]}
-                onPress={() => openAccountSheet(a.id)}
-              >
-                {collapsed ? (
-                  // Collapsed: one line — icon left, balance right.
-                  <View style={styles.chipCompactRow}>
-                    <AppIcon
-                      name={a.icon}
-                      color={palette.dim}
-                      size={16}
-                      fallback="wallet-outline"
-                    />
-                    <Money
-                      minor={balances[a.id] ?? 0}
-                      currency={a.currency}
-                      style={styles.accountBalanceCompact}
-                      numberOfLines={1}
-                    />
-                  </View>
-                ) : (
-                  <>
-                    <View style={styles.accountNameRow}>
+            <DragSortList
+              horizontal
+              gap={Spacing.sm}
+              data={accounts}
+              keyExtractor={(a) => a.id}
+              onReorder={(ids) => void TransactionsController.reorderAccounts(ids)}
+              onDragStateChange={setChipsDragging}
+              liftShadowColor={palette.ink}
+              footer={
+                <Pressable style={styles.addChip} onPress={() => openAccountSheet()}>
+                  <Text style={styles.addChipText}>{t('home.addAccount')}</Text>
+                </Pressable>
+              }
+              renderItem={(a) => (
+                <Pressable
+                  style={[styles.accountChip, collapsed && styles.accountChipCollapsed]}
+                  onPress={() => openAccountSheet(a.id)}
+                >
+                  {collapsed ? (
+                    // Collapsed: one line — icon left, balance right.
+                    <View style={styles.chipCompactRow}>
                       <AppIcon
                         name={a.icon}
                         color={palette.dim}
-                        size={14}
+                        size={16}
                         fallback="wallet-outline"
                       />
-                      <Text {...textProps('caption')} style={styles.accountName} numberOfLines={1}>
-                        {displayAccountName(a)}
-                      </Text>
+                      <Money
+                        minor={balances[a.id] ?? 0}
+                        currency={a.currency}
+                        style={styles.accountBalanceCompact}
+                        numberOfLines={1}
+                      />
                     </View>
-                    <Money
-                      minor={balances[a.id] ?? 0}
-                      currency={a.currency}
-                      style={styles.accountBalance}
-                    />
-                  </>
-                )}
-              </AnimatedPressable>
-            ))}
-            <AnimatedPressable
-              layout={LinearTransition.duration(COLLAPSE_DURATION)}
-              style={styles.addChip}
-              onPress={() => openAccountSheet()}
-            >
-              <Text style={styles.addChipText}>{t('home.addAccount')}</Text>
-            </AnimatedPressable>
+                  ) : (
+                    <>
+                      <View style={styles.accountNameRow}>
+                        <AppIcon
+                          name={a.icon}
+                          color={palette.dim}
+                          size={14}
+                          fallback="wallet-outline"
+                        />
+                        <Text
+                          {...textProps('caption')}
+                          style={styles.accountName}
+                          numberOfLines={1}
+                        >
+                          {displayAccountName(a)}
+                        </Text>
+                      </View>
+                      <Money
+                        minor={balances[a.id] ?? 0}
+                        currency={a.currency}
+                        style={styles.accountBalance}
+                      />
+                    </>
+                  )}
+                </Pressable>
+              )}
+            />
           </ScrollView>
         </Animated.View>
 

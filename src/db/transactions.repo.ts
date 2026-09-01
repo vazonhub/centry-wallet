@@ -279,6 +279,36 @@ export async function dailyDeltasByAccountSince(
   }));
 }
 
+/**
+ * Per-transaction balance deltas within the window (own currency), ascending by
+ * time. Feeds the "по транзакциям" chart — one point per transaction — where the
+ * by-day chart uses {@link dailyDeltasByAccountSince}. Both transfer legs are
+ * included (each moves an account's balance); the caller filters by account.
+ */
+export async function txDeltasSince(
+  sinceLocalDay: string,
+): Promise<{ accountId: string; currency: string; amountMinor: number; localDay: string }[]> {
+  const db = getDb();
+  const rows = await db.getAllAsync<{
+    account_id: string;
+    currency: string;
+    amount_minor: number;
+    local_day: string;
+  }>(
+    `SELECT account_id, currency, amount_minor, local_day
+     FROM transactions
+     WHERE deleted_at IS NULL AND local_day >= ?
+     ORDER BY occurred_at ASC, created_at ASC;`,
+    [sinceLocalDay],
+  );
+  return rows.map((r) => ({
+    accountId: r.account_id,
+    currency: r.currency,
+    amountMinor: r.amount_minor,
+    localDay: r.local_day,
+  }));
+}
+
 /** Top expense categories for a month (base minor units), descending. */
 export async function topCategoriesBaseMinor(
   monthPrefix: string,

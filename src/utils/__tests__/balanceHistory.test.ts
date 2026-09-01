@@ -1,4 +1,4 @@
-import { buildBalanceSeries, lastNLocalDays } from '../balanceHistory';
+import { buildBalanceSeries, buildTransactionSeries, lastNLocalDays } from '../balanceHistory';
 
 describe('lastNLocalDays', () => {
   it('returns ascending local days ending today', () => {
@@ -53,5 +53,56 @@ describe('buildBalanceSeries', () => {
     expect(series[series.length - 1]?.totalBaseMinor).toBe(80_00);
     // Flat when there are no deltas in the window.
     expect(series.every((p) => p.totalBaseMinor === 80_00)).toBe(true);
+  });
+});
+
+describe('buildTransactionSeries', () => {
+  it('walks the running total per transaction; last point = current total', () => {
+    // Current total 250.00 BYN. Three windowed transactions (ascending):
+    //   +50.00 BYN, -10.00 BYN, +50.00 USD (×3 = +150 BYN).
+    const points = buildTransactionSeries({
+      txs: [
+        { accountId: 'a1', currency: 'BYN', amountMinor: 50_00, localDay: '2026-08-18' },
+        { accountId: 'a1', currency: 'BYN', amountMinor: -10_00, localDay: '2026-08-19' },
+        { accountId: 'a2', currency: 'USD', amountMinor: 50_00, localDay: '2026-08-20' },
+      ],
+      accountIds: ['a1', 'a2'],
+      currentTotalBaseMinor: 250_00,
+      rates: { USD: 3_000_000 },
+      base: 'BYN',
+    });
+
+    // total before first = 250 − (50 − 10 + 150) = 60.
+    expect(points).toEqual([
+      { index: 1, day: '2026-08-18', totalBaseMinor: 110_00 }, // 60 + 50
+      { index: 2, day: '2026-08-19', totalBaseMinor: 100_00 }, // 110 − 10
+      { index: 3, day: '2026-08-20', totalBaseMinor: 250_00 }, // 100 + 150
+    ]);
+  });
+
+  it('ignores transactions of unselected accounts', () => {
+    const points = buildTransactionSeries({
+      txs: [
+        { accountId: 'a1', currency: 'BYN', amountMinor: 20_00, localDay: '2026-08-20' },
+        { accountId: 'a2', currency: 'BYN', amountMinor: 999_00, localDay: '2026-08-20' },
+      ],
+      accountIds: ['a1'],
+      currentTotalBaseMinor: 20_00,
+      rates: {},
+      base: 'BYN',
+    });
+    expect(points).toEqual([{ index: 1, day: '2026-08-20', totalBaseMinor: 20_00 }]);
+  });
+
+  it('returns an empty series when there are no windowed transactions', () => {
+    expect(
+      buildTransactionSeries({
+        txs: [],
+        accountIds: ['a1'],
+        currentTotalBaseMinor: 42_00,
+        rates: {},
+        base: 'BYN',
+      }),
+    ).toEqual([]);
   });
 });

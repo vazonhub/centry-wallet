@@ -226,7 +226,10 @@ export const en = {
     accountA11y: 'Include account “{{name}}” in stats',
     hint: 'Uncheck an account to exclude it from the total and the chart. Amounts in other currencies are converted to {{base}} at the current rate. The chart shows the balance over the last {{days}} days; tap a bar to see the balance on that day.',
     overDays: 'over {{n}} d.',
+    overTx: 'over {{n}} tx.',
     balanceOnA11y: 'Balance on {{day}}',
+    chartByDay: 'By day',
+    chartByTx: 'By transaction',
   },
   detail: {
     note: 'Note',

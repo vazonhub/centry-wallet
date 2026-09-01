@@ -292,9 +292,6 @@ export function HistoryScreen() {
 
       {outcome > 0 && catSegments.length > 0 && (
         <Animated.View layout={LinearTransition.duration(240)} style={styles.topBlock}>
-          <Text {...textProps('micro')} style={styles.sectionTitle}>
-            {t('history.spendCategories')}
-          </Text>
           {collapsed ? (
             <Animated.View
               key="seg"
@@ -558,7 +555,8 @@ const makeStyles = (p: Palette) =>
       paddingHorizontal: Spacing.screenPadding,
       paddingTop: Spacing.sm,
       paddingBottom: Spacing.sm,
-      gap: Spacing.md,
+      // Tight gap so the spend bar sits close under the income/outcome totals.
+      gap: Spacing.sm,
       backgroundColor: p.canvasBase,
     },
     monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -640,11 +638,15 @@ const makeStyles = (p: Palette) =>
     filterChipActive: { backgroundColor: p.btnBg, borderColor: p.btnBg },
     filterText: { color: p.ink, fontSize: Typography.footnote.fontSize },
     filterTextActive: { color: p.btnInk },
-    topBlock: { gap: Spacing.sm, marginTop: Spacing.sm },
+    // No top margin: the summary bar sits directly under the totals (the removed
+    // "категории трат" heading previously added the gap).
+    topBlock: { gap: Spacing.sm },
     barRows: { gap: Spacing.sm },
     segBar: {
       flexDirection: 'row',
-      height: 14,
+      // Same thickness as an expanded category bar (barTrack) so the collapsed
+      // summary line reads as the same object, just condensed.
+      height: 10,
       borderRadius: Radius.pill,
       overflow: 'hidden',
       gap: 2,

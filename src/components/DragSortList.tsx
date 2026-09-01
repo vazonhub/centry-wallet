@@ -1,9 +1,9 @@
-/* eslint-disable react-hooks/immutability, react-hooks/refs --
+/* eslint-disable react-hooks/immutability, react-hooks/refs, react-hooks/preserve-manual-memoization --
    Reanimated shared values are intentionally mutable: their `.value` is written
-   on the UI thread inside worklets, and read there to drive animations. The React
-   Compiler immutability/refs rules model neither and false-positive on every
-   `.value` access here. Scoped to this file, which is the only imperative-worklet
-   module in the app. */
+   on the UI thread inside worklets, and read there to drive animations. This file
+   also hand-manages its memoization (stable useCallback handlers whose refs the
+   compiler can't fully infer). The React Compiler rules model neither and
+   false-positive here. Scoped to this file, the only imperative-worklet module. */
 import type { ReactNode } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { type LayoutChangeEvent, type StyleProp, View, type ViewStyle } from 'react-native';
@@ -92,10 +92,13 @@ export function DragSortList<T>({
 
   const keysSig = useMemo(() => data.map(keyExtractor).join(' '), [data, keyExtractor]);
 
-  // Reconcile the local order with the data set when accounts are added / removed
-  // (React's "adjust state during render" pattern — cheaper than an effect and
-  // runs before paint). Survivors keep their current order; newcomers append; a
-  // reorder we just persisted comes back with the same members, so order stays.
+  // Reconcile the local order with the data set (React's "adjust state during
+  // render" pattern — cheaper than an effect and runs before paint).
+  //   • members changed (add/remove): survivors keep their order, newcomers append;
+  //   • same members, different sequence, and not mid-drag: adopt the incoming
+  //     order — this keeps the same list in sync across screens (e.g. reordering
+  //     accounts on Home is reflected in Settings and vice versa).
+  // A reorder we just persisted comes back with the same order, so this no-ops.
   const prevSig = useRef(keysSig);
   if (prevSig.current !== keysSig) {
     prevSig.current = keysSig;
@@ -108,6 +111,9 @@ export function DragSortList<T>({
       const next = [...kept, ...added];
       orderRef.current = next;
       setOrder(next);
+    } else if (!activeKeyRef.current && keys.some((k, i) => k !== order[i])) {
+      orderRef.current = keys;
+      setOrder(keys);
     }
   }
 

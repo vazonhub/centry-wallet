@@ -14,8 +14,7 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleLocalizations": ["ru", "en"],
-        "AppGroup": "group.by.vazon.centry",
-        "LSApplicationQueriesSchemes": ["centry"]
+        "AppGroup": "group.by.vazon.centry"
       },
       "entitlements": {
         "com.apple.security.application-groups": ["group.by.vazon.centry"]

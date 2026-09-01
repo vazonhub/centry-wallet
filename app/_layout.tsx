@@ -14,6 +14,7 @@ import '@i18n';
 import { useAppBootstrap } from '@hooks/useAppBootstrap';
 import { useNotificationResponse } from '@hooks/useNotificationResponse';
 import { useIsDark, usePalette } from '@hooks/usePalette';
+import { useSiriPrefill } from '@hooks/useSiriPrefill';
 import { useWidgetDeepLink } from '@hooks/useWidgetDeepLink';
 import { AccountSheet } from '@components/AccountSheet';
 import { BudgetSheet } from '@components/BudgetSheet';
@@ -42,6 +43,7 @@ export default function RootLayout() {
   // picker/modal) forced a re-commit.
   const { ready } = useAppBootstrap();
   useWidgetDeepLink();
+  useSiriPrefill();
   useNotificationResponse();
   const isDark = useIsDark();
   const palette = usePalette();

@@ -134,3 +134,52 @@ export function buildTransactionSeries(input: {
     return { index: i + 1, day: t.localDay, totalBaseMinor: running };
   });
 }
+
+// --- Income / expense flow series (wallet-total sheet flow dropdown) ---------
+
+export interface FlowDayRow {
+  localDay: string;
+  incomeBaseMinor: number;
+  expenseBaseMinor: number;
+}
+
+export interface FlowPoint {
+  /** 'YYYY-MM-DD' (local) — the by-day bucket or the transaction's day. */
+  day: string;
+  /** Non-negative base-minor magnitude of income (or expense) for this point. */
+  valueBaseMinor: number;
+}
+
+/**
+ * Per-day income OR expense totals (base minor), zero-filled across `days` so the
+ * chart always has one bar per plotted day (missing days read as 0 flow).
+ */
+export function buildFlowDaySeries(
+  rows: FlowDayRow[],
+  days: string[],
+  mode: 'income' | 'expense',
+): FlowPoint[] {
+  const byDay = new Map<string, number>();
+  for (const r of rows) {
+    byDay.set(r.localDay, mode === 'income' ? r.incomeBaseMinor : r.expenseBaseMinor);
+  }
+  return days.map((day) => ({ day, valueBaseMinor: byDay.get(day) ?? 0 }));
+}
+
+export interface FlowTxRow {
+  localDay: string;
+  amountMinor: number;
+  rateToBaseE6: number;
+}
+
+/**
+ * One point per income (or expense) transaction — value is the base-minor
+ * magnitude, frozen at the transaction's own rate (matches History totals).
+ */
+export function buildFlowTxSeries(txs: FlowTxRow[], mode: 'income' | 'expense'): FlowPoint[] {
+  const wanted = txs.filter((t) => (mode === 'income' ? t.amountMinor > 0 : t.amountMinor < 0));
+  return wanted.map((t) => ({
+    day: t.localDay,
+    valueBaseMinor: Math.abs(convertToBase(t.amountMinor, t.rateToBaseE6)),
+  }));
+}

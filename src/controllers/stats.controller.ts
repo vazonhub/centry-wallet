@@ -4,11 +4,16 @@ import { useSettingsStore } from '@stores/settings.store';
 import {
   type BalancePoint,
   buildBalanceSeries,
+  buildFlowDaySeries,
+  buildFlowTxSeries,
   buildTransactionSeries,
+  type FlowPoint,
   lastNLocalDays,
   type TxBalancePoint,
 } from '@utils/balanceHistory';
 import { totalBalanceBaseMinor } from '@utils/summary';
+
+type FlowMode = 'income' | 'expense';
 
 /**
  * Balance-over-time series for the wallet-total sheet (docs/UX_SPEC.md#главная).
@@ -62,4 +67,45 @@ export async function getTransactionSeries(
   return buildTransactionSeries({ txs, accountIds: ids, currentTotalBaseMinor, rates, base });
 }
 
-export const StatsController = { getBalanceSeries, getTransactionSeries };
+/**
+ * Per-day income OR expense flow for the wallet-total sheet's flow dropdown
+ * (docs/UX_SPEC.md#главная). Base minor units, transfers excluded, restricted to
+ * the enabled accounts. Read-only.
+ */
+export async function getFlowDaySeries(
+  mode: FlowMode,
+  days = 30,
+  accountIds?: string[],
+): Promise<FlowPoint[]> {
+  const { accounts } = useDataStore.getState();
+  const selected = accountIds ? accounts.filter((a) => accountIds.includes(a.id)) : accounts;
+  const filterIds = accountIds ? selected.map((a) => a.id) : undefined;
+
+  const dayList = lastNLocalDays(days, new Date());
+  const since = dayList[0] ?? dayList[dayList.length - 1] ?? '';
+  const rows = await TransactionsRepo.flowByDaySince(since, filterIds);
+  return buildFlowDaySeries(rows, dayList, mode);
+}
+
+/** Per-transaction income OR expense flow — one point per matching transaction. */
+export async function getFlowTxSeries(
+  mode: FlowMode,
+  days = 30,
+  accountIds?: string[],
+): Promise<FlowPoint[]> {
+  const { accounts } = useDataStore.getState();
+  const selected = accountIds ? accounts.filter((a) => accountIds.includes(a.id)) : accounts;
+  const filterIds = accountIds ? selected.map((a) => a.id) : undefined;
+
+  const dayList = lastNLocalDays(days, new Date());
+  const since = dayList[0] ?? dayList[dayList.length - 1] ?? '';
+  const txs = await TransactionsRepo.flowTxSince(since, filterIds);
+  return buildFlowTxSeries(txs, mode);
+}
+
+export const StatsController = {
+  getBalanceSeries,
+  getTransactionSeries,
+  getFlowDaySeries,
+  getFlowTxSeries,
+};

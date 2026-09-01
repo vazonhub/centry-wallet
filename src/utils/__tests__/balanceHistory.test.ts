@@ -1,4 +1,10 @@
-import { buildBalanceSeries, buildTransactionSeries, lastNLocalDays } from '../balanceHistory';
+import {
+  buildBalanceSeries,
+  buildFlowDaySeries,
+  buildFlowTxSeries,
+  buildTransactionSeries,
+  lastNLocalDays,
+} from '../balanceHistory';
 
 describe('lastNLocalDays', () => {
   it('returns ascending local days ending today', () => {
@@ -104,5 +110,50 @@ describe('buildTransactionSeries', () => {
         base: 'BYN',
       }),
     ).toEqual([]);
+  });
+});
+
+describe('buildFlowDaySeries', () => {
+  const days = ['2026-08-18', '2026-08-19', '2026-08-20'];
+  const rows = [
+    { localDay: '2026-08-18', incomeBaseMinor: 100_00, expenseBaseMinor: 30_00 },
+    { localDay: '2026-08-20', incomeBaseMinor: 0, expenseBaseMinor: 12_50 },
+  ];
+
+  it('zero-fills income across the plotted days', () => {
+    expect(buildFlowDaySeries(rows, days, 'income')).toEqual([
+      { day: '2026-08-18', valueBaseMinor: 100_00 },
+      { day: '2026-08-19', valueBaseMinor: 0 },
+      { day: '2026-08-20', valueBaseMinor: 0 },
+    ]);
+  });
+
+  it('zero-fills expense across the plotted days', () => {
+    expect(buildFlowDaySeries(rows, days, 'expense')).toEqual([
+      { day: '2026-08-18', valueBaseMinor: 30_00 },
+      { day: '2026-08-19', valueBaseMinor: 0 },
+      { day: '2026-08-20', valueBaseMinor: 12_50 },
+    ]);
+  });
+});
+
+describe('buildFlowTxSeries', () => {
+  const txs = [
+    { localDay: '2026-08-18', amountMinor: 50_00, rateToBaseE6: 1_000_000 }, // income BYN
+    { localDay: '2026-08-19', amountMinor: -10_00, rateToBaseE6: 1_000_000 }, // expense BYN
+    { localDay: '2026-08-20', amountMinor: -5_00, rateToBaseE6: 3_000_000 }, // expense USD ×3
+  ];
+
+  it('keeps only income and reports base magnitudes', () => {
+    expect(buildFlowTxSeries(txs, 'income')).toEqual([
+      { day: '2026-08-18', valueBaseMinor: 50_00 },
+    ]);
+  });
+
+  it('keeps only expense, converting at the frozen rate (magnitude)', () => {
+    expect(buildFlowTxSeries(txs, 'expense')).toEqual([
+      { day: '2026-08-19', valueBaseMinor: 10_00 },
+      { day: '2026-08-20', valueBaseMinor: 15_00 }, // 5.00 USD × 3 = 15.00 BYN
+    ]);
   });
 });

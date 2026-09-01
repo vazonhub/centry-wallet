@@ -31,30 +31,36 @@ export function AboutScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.section}>{t('about.links')}</Text>
-        <View style={styles.card}>
-          <Pressable style={styles.navRow} onPress={() => void Linking.openURL(TELEGRAM_URL)}>
-            <Ionicons name="paper-plane-outline" size={20} color={palette.accent} />
-            <Text style={styles.navLabel}>Telegram</Text>
+        {/* Links — each its own glass card (matches Accounts / Categories). */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('about.links')}</Text>
+          <Pressable style={styles.card} onPress={() => void Linking.openURL(TELEGRAM_URL)}>
+            <View style={styles.labelRow}>
+              <Ionicons name="paper-plane-outline" size={20} color={palette.accent} />
+              <Text style={styles.name}>Telegram</Text>
+            </View>
             <Ionicons name="open-outline" size={18} color={palette.dim2} />
           </Pressable>
-          <View style={styles.separator} />
-          <Pressable style={styles.navRow} onPress={() => void Linking.openURL(GITHUB_URL)}>
-            <Ionicons name="logo-github" size={20} color={palette.accent} />
-            <Text style={styles.navLabel}>GitHub</Text>
+          <Pressable style={styles.card} onPress={() => void Linking.openURL(GITHUB_URL)}>
+            <View style={styles.labelRow}>
+              <Ionicons name="logo-github" size={20} color={palette.accent} />
+              <Text style={styles.name}>GitHub</Text>
+            </View>
             <Ionicons name="open-outline" size={18} color={palette.dim2} />
           </Pressable>
-          <View style={styles.separator} />
-          <Pressable style={styles.navRow} onPress={() => void Linking.openURL(PRIVACY_URL)}>
-            <Ionicons name="shield-checkmark-outline" size={20} color={palette.accent} />
-            <Text style={styles.navLabel}>{t('about.privacy')}</Text>
+          <Pressable style={styles.card} onPress={() => void Linking.openURL(PRIVACY_URL)}>
+            <View style={styles.labelRow}>
+              <Ionicons name="shield-checkmark-outline" size={20} color={palette.accent} />
+              <Text style={styles.name}>{t('about.privacy')}</Text>
+            </View>
             <Ionicons name="open-outline" size={18} color={palette.dim2} />
           </Pressable>
         </View>
 
-        <Text style={styles.section}>{t('about.appInfo')}</Text>
-        <View style={styles.card}>
-          <View style={styles.row}>
+        {/* App info */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t('about.appInfo')}</Text>
+          <View style={styles.card}>
             <Text style={styles.label}>{t('about.version')}</Text>
             <Text style={styles.value}>{version}</Text>
           </View>
@@ -72,37 +78,30 @@ const makeStyles = (p: Palette) =>
     scroll: {
       paddingTop: Spacing.screenPadding,
       paddingHorizontal: Spacing.screenPadding,
-      gap: Spacing.sm,
+      gap: Spacing.xl,
     },
-    section: {
-      color: p.dim2,
-      fontSize: Typography.caption.fontSize,
-      letterSpacing: 0.8,
-      marginTop: Spacing.md,
-      marginBottom: Spacing.xs,
-      marginLeft: Spacing.xs,
+    section: { gap: Spacing.md },
+    sectionTitle: {
+      color: p.dim,
+      fontSize: 13,
+      fontWeight: '600',
+      textTransform: 'uppercase',
+      letterSpacing: 0.3,
     },
     card: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: Spacing.md,
       backgroundColor: p.glassBg,
       borderColor: p.glassBorder,
       borderWidth: StyleSheet.hairlineWidth,
       borderRadius: Radius.card,
+      paddingVertical: Spacing.md,
       paddingHorizontal: Spacing.lg,
     },
-    navRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: Spacing.lg,
-      paddingVertical: Spacing.md,
-    },
-    navLabel: { flex: 1, color: p.ink, fontSize: Typography.body.fontSize },
-    separator: { height: StyleSheet.hairlineWidth, backgroundColor: p.glassBorder },
-    row: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: Spacing.md,
-    },
+    labelRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.lg, flexShrink: 1 },
+    name: { flexShrink: 1, color: p.ink, fontSize: Typography.body.fontSize },
     label: { color: p.ink, fontSize: Typography.body.fontSize },
     value: { color: p.dim, fontSize: Typography.body.fontSize, fontVariant: ['tabular-nums'] },
     footnote: {

@@ -7,6 +7,7 @@ import { AppIcon } from '@components/AppIcon';
 import { openAccountSheet } from '@components/accountSheetRef';
 import { DragSortList } from '@components/DragSortList';
 import { Money } from '@components/Money';
+import { NegativeBalanceWarning } from '@components/NegativeBalanceWarning';
 import { ScreenHeader } from '@components/ScreenHeader';
 import { TransactionsController } from '@controllers/transactions.controller';
 import { usePalette } from '@hooks/usePalette';
@@ -36,6 +37,9 @@ export function AccountsScreen() {
         <Text style={styles.label} numberOfLines={1}>
           {displayAccountName(a)} · {a.currency}
         </Text>
+        {(balances[a.id] ?? 0) < 0 && (
+          <NegativeBalanceWarning accountName={displayAccountName(a)} />
+        )}
       </View>
       <Money minor={balances[a.id] ?? 0} currency={a.currency} style={styles.value} />
     </Pressable>
@@ -99,6 +103,7 @@ const makeStyles = (p: Palette) =>
     },
     labelRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, flexShrink: 1 },
     label: { color: p.ink, fontSize: Typography.body.fontSize, flexShrink: 1 },
+    valueRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
     value: { color: p.ink, fontSize: Typography.body.fontSize },
     action: { color: p.pos, fontSize: Typography.body.fontSize },
   });

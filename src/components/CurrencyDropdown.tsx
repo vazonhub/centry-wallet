@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { COMMON_CURRENCIES } from '@constants/currencies';
+import { commonCurrencies } from '@constants/currencies';
 import { usePalette } from '@hooks/usePalette';
 import type { Palette } from '@theme';
 import { Radius, Spacing, Typography } from '@theme';
@@ -26,7 +26,8 @@ export function CurrencyDropdown({ value, onChange }: Props) {
   const palette = usePalette();
   const styles = makeStyles(palette);
   const [open, setOpen] = useState(false);
-  const selected = COMMON_CURRENCIES.find((c) => c.code === value);
+  const currencies = useMemo(() => commonCurrencies(), []);
+  const selected = currencies.find((c) => c.code === value);
 
   return (
     <View style={[styles.root, open && styles.rootOpen]}>
@@ -52,7 +53,7 @@ export function CurrencyDropdown({ value, onChange }: Props) {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {COMMON_CURRENCIES.map((c) => {
+            {currencies.map((c) => {
               const active = c.code === value;
               return (
                 <Pressable

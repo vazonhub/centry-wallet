@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { BudgetPlanEditor } from '@components/BudgetPlanEditor';
 import { ScreenHeader } from '@components/ScreenHeader';
-import { COMMON_CURRENCIES } from '@constants/currencies';
+import { commonCurrencies } from '@constants/currencies';
 import { DataController } from '@controllers/data.controller';
 import { usePalette } from '@hooks/usePalette';
 import { useSettingsStore } from '@stores/settings.store';
@@ -21,6 +21,7 @@ export function MoneyScreen() {
   const baseCurrency = useSettingsStore((s) => s.baseCurrency);
   const budgetPlan = useSettingsStore((s) => s.budgetPlan);
   const setBudgetPlan = useSettingsStore((s) => s.setBudgetPlan);
+  const currencies = useMemo(() => commonCurrencies(), []);
 
   const onBase = (code: string) => {
     hapticLight();
@@ -41,7 +42,7 @@ export function MoneyScreen() {
       >
         <Text style={styles.sectionTitle}>{t('money.baseCurrency')}</Text>
         <View style={styles.chips}>
-          {COMMON_CURRENCIES.map((c) => {
+          {currencies.map((c) => {
             const active = c.code === baseCurrency;
             return (
               <Pressable

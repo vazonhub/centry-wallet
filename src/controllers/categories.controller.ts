@@ -46,10 +46,25 @@ async function updateCategory(
   await DataController.loadAll();
 }
 
-/** Soft-deletes a user category (rule 10). System categories are not deletable. */
+/** Soft-deletes a category (rule 10). Its entries keep their frozen data. */
 async function deleteCategory(id: Id): Promise<void> {
   await CategoriesRepo.softDeleteCategory(id, nowSec());
   await DataController.loadAll();
 }
 
-export const CategoriesController = { createCategory, updateCategory, deleteCategory };
+/**
+ * Persists a user-defined category order (drag-and-drop in settings). `orderedIds`
+ * is one kind's visible order; `sort_order` is rewritten to match, then the store
+ * refreshes through the single funnel.
+ */
+async function reorderCategories(orderedIds: Id[]): Promise<void> {
+  await CategoriesRepo.reorderCategories(orderedIds, nowSec());
+  await DataController.loadAll();
+}
+
+export const CategoriesController = {
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  reorderCategories,
+};

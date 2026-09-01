@@ -115,6 +115,25 @@ export async function updateCategory(
   );
 }
 
+/**
+ * Persists a new category ordering. `orderedIds` is the visible order of one kind
+ * (expense or income); each category's `sort_order` is rewritten to its index in
+ * a single transaction (rule 10: `updated_at` bumped so the change is sync-visible).
+ * The two kinds are shown/filtered separately, so their index spaces may overlap.
+ */
+export async function reorderCategories(orderedIds: Id[], updatedAt: number): Promise<void> {
+  const db = getDb();
+  await db.withTransactionAsync(async () => {
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.runAsync(`UPDATE categories SET sort_order = ?, updated_at = ? WHERE id = ?;`, [
+        i,
+        updatedAt,
+        orderedIds[i] as string,
+      ]);
+    }
+  });
+}
+
 export async function softDeleteCategory(id: Id, deletedAt: number): Promise<void> {
   const db = getDb();
   await db.runAsync(`UPDATE categories SET deleted_at = ?, updated_at = ? WHERE id = ?;`, [

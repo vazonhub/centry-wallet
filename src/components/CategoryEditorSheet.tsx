@@ -185,7 +185,7 @@ export function CategoryEditorSheet() {
             {editing ? t('common.save') : t('categoryEditor.create')}
           </Text>
         </Pressable>
-        {editing && !editing.isSystem && (
+        {editing && (
           <Pressable onPress={onDelete} style={styles.delete}>
             <Text style={styles.deleteText}>{t('categoryEditor.deleteButton')}</Text>
           </Pressable>

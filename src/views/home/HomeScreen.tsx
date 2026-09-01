@@ -20,6 +20,8 @@ import { openBudgetSheet } from '@components/budgetSheetRef';
 import { openInputSheet } from '@components/inputSheetRef';
 import { openWalletTotal } from '@components/walletTotalRef';
 import { Money } from '@components/Money';
+import { NegativeBalanceWarning } from '@components/NegativeBalanceWarning';
+import { TransferAmount } from '@components/TransferAmount';
 import { openTransactionDetail } from '@components/transactionDetailRef';
 import { TransactionsController } from '@controllers/transactions.controller';
 import { EXPENSE_FALLBACK_ICON, INCOME_FALLBACK_ICON, TRANSFER_ICON } from '@constants/icons';
@@ -49,6 +51,11 @@ const COLLAPSE_DURATION = 220;
  * and re-expand — a flip-flop loop (same guard as the History screen).
  */
 const COLLAPSE_MIN_SCROLL = 180;
+
+/** Feed rows are revealed a page at a time as you scroll (lazy loading). */
+const FEED_PAGE = 25;
+/** Distance from the feed's end (px) at which the next page is revealed. */
+const FEED_LOAD_AHEAD = 500;
 
 /** Net change of a day in base minor units (transfers excluded — internal moves). */
 function dayNetBaseMinor(txs: Transaction[]): number {
@@ -84,18 +91,38 @@ export function HomeScreen() {
     [categories],
   );
 
+  // Destination leg of each transfer (the positive, to-account row), keyed by
+  // pair id, so a shown from-leg can display "source → destination".
+  const transferToLeg = useMemo(() => {
+    const m = new Map<string, Transaction>();
+    for (const t of recent) {
+      if (t.kind === 'transfer' && t.amountMinor > 0 && t.transferPairId) {
+        m.set(t.transferPairId, t);
+      }
+    }
+    return m;
+  }, [recent]);
+
   // Collapse the hero + account chips into single-line rows once the feed
   // scrolls (mirrors the History screen). Gated on real scrollable room so it
   // can never flip-flop when there is barely anything to scroll.
   const [collapsed, setCollapsed] = useState(false);
   // Freeze the chips scroller while an account chip is being dragged.
   const [chipsDragging, setChipsDragging] = useState(false);
+  // Lazy loading: how many recent entries the feed currently renders. Grows a
+  // page at a time as you scroll, so a long history never mounts all at once.
+  const [visibleCount, setVisibleCount] = useState(FEED_PAGE);
   const contentH = useRef(0);
   const viewportH = useRef(0);
+  const recentLen = recent.length;
 
   const onFeedScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const y = e.nativeEvent.contentOffset.y;
+      // Reveal the next page as the feed nears its end.
+      if (contentH.current - viewportH.current - y < FEED_LOAD_AHEAD) {
+        setVisibleCount((c) => (c < recentLen ? c + FEED_PAGE : c));
+      }
       if (!collapsed) {
         const maxScroll = contentH.current - viewportH.current;
         if (maxScroll <= COLLAPSE_MIN_SCROLL) return;
@@ -104,7 +131,7 @@ export function HomeScreen() {
         setCollapsed(false);
       }
     },
-    [collapsed],
+    [collapsed, recentLen],
   );
 
   const { perDayMinor, todaySpent, carry, heroColor, configured, shortfallMinor, totalMinor } =
@@ -167,7 +194,7 @@ export function HomeScreen() {
 
   const days = useMemo(() => {
     const map = new Map<string, Transaction[]>();
-    for (const t of recent.slice(0, 80)) {
+    for (const t of recent.slice(0, visibleCount)) {
       // A transfer is two linked rows; show it once (the source/negative leg).
       if (t.kind === 'transfer' && t.amountMinor > 0) continue;
       const arr = map.get(t.localDay) ?? [];
@@ -175,7 +202,7 @@ export function HomeScreen() {
       map.set(t.localDay, arr);
     }
     return [...map.entries()];
-  }, [recent]);
+  }, [recent, visibleCount]);
 
   // Tapping the hero opens the budget-plan sheet in place (staying on Home).
   const onHeroPress = useCallback(() => {
@@ -410,6 +437,9 @@ export function HomeScreen() {
                         style={styles.accountBalanceCompact}
                         numberOfLines={1}
                       />
+                      {(balances[a.id] ?? 0) < 0 && (
+                        <NegativeBalanceWarning accountName={displayAccountName(a)} size={14} />
+                      )}
                     </View>
                   ) : (
                     <>
@@ -427,6 +457,9 @@ export function HomeScreen() {
                         >
                           {displayAccountName(a)}
                         </Text>
+                        {(balances[a.id] ?? 0) < 0 && (
+                          <NegativeBalanceWarning accountName={displayAccountName(a)} size={14} />
+                        )}
                       </View>
                       <Money
                         minor={balances[a.id] ?? 0}
@@ -490,10 +523,13 @@ export function HomeScreen() {
                     const title = isTransfer
                       ? t('home.transfer')
                       : tx.note || (cat && displayCategoryName(cat)) || t('home.noCategory');
+                    const toLeg = tx.transferPairId
+                      ? transferToLeg.get(tx.transferPairId)
+                      : undefined;
                     return (
                       <Pressable
                         key={tx.id}
-                        onPress={() => openTransactionDetail(tx)}
+                        onPress={() => openTransactionDetail(tx, undefined, toLeg)}
                         style={[styles.txRow, { backgroundColor: hexToRgba(accent, 0.14) }]}
                       >
                         <View
@@ -504,17 +540,24 @@ export function HomeScreen() {
                         <Text {...textProps('row')} style={styles.rowTitle} numberOfLines={1}>
                           {title}
                         </Text>
-                        <Money
-                          minor={tx.amountMinor}
-                          currency={tx.currency}
-                          options={{ showPlus: !isTransfer }}
-                          style={[
-                            styles.rowAmount,
-                            {
-                              color: tx.amountMinor >= 0 && !isTransfer ? palette.pos : palette.ink,
-                            },
-                          ]}
-                        />
+                        {isTransfer ? (
+                          <TransferAmount
+                            fromMinorAbs={Math.abs(tx.amountMinor)}
+                            fromCurrency={tx.currency}
+                            toMinorAbs={Math.abs(toLeg?.amountMinor ?? tx.amountMinor)}
+                            toCurrency={toLeg?.currency ?? tx.currency}
+                          />
+                        ) : (
+                          <Money
+                            minor={tx.amountMinor}
+                            currency={tx.currency}
+                            options={{ showPlus: true }}
+                            style={[
+                              styles.rowAmount,
+                              { color: tx.amountMinor >= 0 ? palette.pos : palette.ink },
+                            ]}
+                          />
+                        )}
                       </Pressable>
                     );
                   })}

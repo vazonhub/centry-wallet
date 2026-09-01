@@ -115,6 +115,7 @@ export const ru: Translations = {
     toAccount: 'НА СЧЁТ',
     rate: 'КУРС',
     total: 'ИТОГ ({{currency}})',
+    rateAndTotal: 'КУРС И ИТОГ',
     notePlaceholder: 'Заметка (необязательно)',
     date: 'ДАТА',
   },
@@ -151,6 +152,9 @@ export const ru: Translations = {
     emptyMonth: 'В этом месяце записей нет.',
     transfer: 'Перевод',
     noCategory: 'Без категории',
+    other: 'Прочее',
+    prevMonth: 'Предыдущий месяц',
+    nextMonth: 'Следующий месяц',
     monthsShort: [
       'Янв',
       'Фев',
@@ -192,6 +196,9 @@ export const ru: Translations = {
       'Счёт скроется из кошелька, чипсов и фильтров. Записи по нему останутся в истории — курсы и суммы не переписываются.',
     deleteFailedTitle: 'Не удалось удалить',
     genericError: 'Ошибка.',
+    negativeTitle: 'Счёт в минусе',
+    negativeBody:
+      'На счёте «{{name}}» отрицательный баланс. Пополните его или проверьте записи — возможно, трата записана не с того счёта.',
   },
   budgetSheet: {
     heading: 'План бюджета',
@@ -219,6 +226,9 @@ export const ru: Translations = {
     deleteButton: 'Удалить категорию',
   },
   walletTotal: {
+    flowAll: 'Все',
+    flowIncome: 'Приход',
+    flowExpense: 'Расход',
     totalMoney: 'ВСЕГО ДЕНЕГ',
     byAccounts: 'ПО СЧЕТАМ',
     accountA11y: 'Учитывать счёт «{{name}}» в статистике',
@@ -228,6 +238,7 @@ export const ru: Translations = {
     balanceOnA11y: 'Баланс на {{day}}',
     chartByDay: 'По дням',
     chartByTx: 'По транзакциям',
+    chartEmpty: 'Нет данных за период',
   },
   detail: {
     note: 'Заметка',
@@ -235,6 +246,8 @@ export const ru: Translations = {
     deleteBody: 'Действие можно отменить только повторным вводом.',
     editHint: 'нажмите на сумму, чтобы изменить',
     account: 'Счёт',
+    fromAccount: 'Со счёта',
+    toAccount: 'На счёт',
     date: 'Дата',
     rateToBase: 'Курс к базе',
     inBase: 'В базе',
@@ -249,6 +262,10 @@ export const ru: Translations = {
     periodMonth: 'месяц',
     transfer: 'Перевод',
     noCategory: 'Без категории',
+    allowanceTitle: 'МОЖНО СЕГОДНЯ',
+    spent: 'потрачено',
+    forPeriod: 'на {{period}}',
+    empty: 'Нет записей',
   },
   currencies: {
     BYN: 'Белорусский рубль',

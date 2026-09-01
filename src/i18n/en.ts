@@ -117,6 +117,7 @@ export const en = {
     toAccount: 'TO ACCOUNT',
     rate: 'RATE',
     total: 'TOTAL ({{currency}})',
+    rateAndTotal: 'RATE & TOTAL',
     notePlaceholder: 'Note (optional)',
     date: 'DATE',
   },
@@ -153,6 +154,9 @@ export const en = {
     emptyMonth: 'No records this month.',
     transfer: 'Transfer',
     noCategory: 'No category',
+    other: 'Other',
+    prevMonth: 'Previous month',
+    nextMonth: 'Next month',
     monthsShort: [
       'Jan',
       'Feb',
@@ -194,6 +198,9 @@ export const en = {
       'The account will be hidden from your wallet, chips and filters. Its records stay in history — rates and amounts are not rewritten.',
     deleteFailedTitle: 'Couldn’t delete',
     genericError: 'Error.',
+    negativeTitle: 'Account in the red',
+    negativeBody:
+      '“{{name}}” has a negative balance. Top it up or review its records — you may have logged a spend from the wrong account.',
   },
   budgetSheet: {
     heading: 'Budget plan',
@@ -221,6 +228,9 @@ export const en = {
     deleteButton: 'Delete category',
   },
   walletTotal: {
+    flowAll: 'All',
+    flowIncome: 'Income',
+    flowExpense: 'Expense',
     totalMoney: 'TOTAL MONEY',
     byAccounts: 'BY ACCOUNT',
     accountA11y: 'Include account “{{name}}” in stats',
@@ -230,6 +240,7 @@ export const en = {
     balanceOnA11y: 'Balance on {{day}}',
     chartByDay: 'By day',
     chartByTx: 'By transaction',
+    chartEmpty: 'No data for this period',
   },
   detail: {
     note: 'Note',
@@ -237,6 +248,8 @@ export const en = {
     deleteBody: 'This can only be undone by entering it again.',
     editHint: 'tap the amount to change it',
     account: 'Account',
+    fromAccount: 'From',
+    toAccount: 'To',
     date: 'Date',
     rateToBase: 'Rate to base',
     inBase: 'In base',
@@ -251,6 +264,10 @@ export const en = {
     periodMonth: 'month',
     transfer: 'Transfer',
     noCategory: 'No category',
+    allowanceTitle: 'CAN SPEND TODAY',
+    spent: 'spent',
+    forPeriod: 'for the {{period}}',
+    empty: 'No records',
   },
   currencies: {
     BYN: 'Belarusian ruble',

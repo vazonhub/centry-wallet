@@ -7,7 +7,7 @@
 import type { ReactNode } from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { type LayoutChangeEvent, type StyleProp, View, type ViewStyle } from 'react-native';
-import { Gesture, GestureDetector, type GestureType } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   LinearTransition,
   runOnJS,
@@ -184,35 +184,6 @@ export function DragSortList<T>({
     if (!unchanged) cb.current.onReorder(finalOrder);
   }, [activeKeySV, translate, homeShift]);
 
-  // Gestures are built here (not in the row) so the shared-value writes live in
-  // the component that owns them. Rebuilt only when the member set changes, so a
-  // mid-drag reorder never swaps the active gesture out from under the finger.
-  const gestures = useMemo(() => {
-    const build = (key: string): GestureType =>
-      Gesture.Pan()
-        .activateAfterLongPress(LONG_PRESS_MS)
-        .onStart(() => {
-          translate.value = 0;
-          homeShift.value = 0;
-          activeKeySV.value = key;
-          runOnJS(onBegin)(key);
-        })
-        .onUpdate((e) => {
-          translate.value = horizontal ? e.translationX : e.translationY;
-          runOnJS(onMove)(translate.value);
-        })
-        .onFinalize(() => {
-          translate.value = withTiming(homeShift.value, { duration: REORDER_DURATION }, (done) => {
-            if (done) runOnJS(endDrag)();
-          });
-        });
-
-    const m = new Map<string, GestureType>();
-    for (const key of keysSig ? keysSig.split(' ') : []) m.set(key, build(key));
-    return m;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keysSig, horizontal, onBegin, onMove, endDrag]);
-
   const map = useMemo(() => {
     const m = new Map<string, T>();
     for (const it of data) m.set(keyExtractor(it), it);
@@ -233,18 +204,18 @@ export function DragSortList<T>({
     <View style={[containerStyle, style]}>
       {ordered.map((item) => {
         const key = keyExtractor(item);
-        const gesture = gestures.get(key);
-        if (!gesture) return null;
         return (
           <DraggableRow
             key={key}
             itemKey={key}
             active={activeKey === key}
             horizontal={horizontal}
-            gesture={gesture}
             translate={translate}
             homeShift={homeShift}
             activeKeySV={activeKeySV}
+            onBegin={onBegin}
+            onMove={onMove}
+            endDrag={endDrag}
             onMeasure={onMeasure}
             shadowColor={liftShadowColor}
           >
@@ -261,10 +232,12 @@ interface DraggableRowProps {
   itemKey: string;
   active: boolean;
   horizontal: boolean;
-  gesture: GestureType;
   translate: SharedValue<number>;
   homeShift: SharedValue<number>;
   activeKeySV: SharedValue<string>;
+  onBegin: (key: string) => void;
+  onMove: (raw: number) => void;
+  endDrag: () => void;
   onMeasure: (key: string, size: number) => void;
   shadowColor?: string;
   children: ReactNode;
@@ -274,14 +247,42 @@ function DraggableRow({
   itemKey,
   active,
   horizontal,
-  gesture,
   translate,
   homeShift,
   activeKeySV,
+  onBegin,
+  onMove,
+  endDrag,
   onMeasure,
   shadowColor,
   children,
 }: DraggableRowProps) {
+  // Each row owns its own gesture, keyed on its stable `itemKey`. Building it per
+  // row (rather than in a shared parent map that must grow as items are added)
+  // means a newly added item always has a live gesture, and — since itemKey and
+  // the callbacks are stable — the active row's gesture never changes mid-drag.
+  const gesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activateAfterLongPress(LONG_PRESS_MS)
+        .onStart(() => {
+          translate.value = 0;
+          homeShift.value = 0;
+          activeKeySV.value = itemKey;
+          runOnJS(onBegin)(itemKey);
+        })
+        .onUpdate((e) => {
+          translate.value = horizontal ? e.translationX : e.translationY;
+          runOnJS(onMove)(translate.value);
+        })
+        .onFinalize(() => {
+          translate.value = withTiming(homeShift.value, { duration: REORDER_DURATION }, (done) => {
+            if (done) runOnJS(endDrag)();
+          });
+        }),
+    [itemKey, horizontal, onBegin, onMove, endDrag, translate, homeShift, activeKeySV],
+  );
+
   const animStyle = useAnimatedStyle(() => {
     const isActive = activeKeySV.value === itemKey;
     const offset = isActive ? translate.value - homeShift.value : 0;

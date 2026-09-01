@@ -24,10 +24,15 @@ import { displayAccountName } from '@utils/displayName';
 import { hapticLight, hapticSuccess } from '@utils/haptics';
 import {
   amountPlaceholder,
+  formatRate,
   minorToAmountInput,
   parseAmountToMinor,
+  parseRateToE6,
   sanitizeAmountInput,
+  sanitizeRateInput,
 } from '@utils/money';
+
+const E6_ONE = 1_000_000;
 
 type KindKey = 'accountSheet.kindCash' | 'accountSheet.kindCard' | 'accountSheet.kindWallet';
 const ACCOUNT_KINDS: { kind: Account['kind']; labelKey: KindKey; icon: IoniconName }[] = [
@@ -47,13 +52,23 @@ export function AccountSheet() {
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const baseCurrency = useSettingsStore((s) => s.baseCurrency);
+  const rates = useDataStore((s) => s.rates);
 
   const sheetRef = useRef<BottomSheetModal>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [currency, setCurrency] = useState(baseCurrency);
+  // The account's currency when the sheet opened; a change triggers conversion.
+  const [origCurrency, setOrigCurrency] = useState(baseCurrency);
   const [kind, setKind] = useState<Account['kind']>('cash');
   const [opening, setOpening] = useState('');
+  // Editable from→to conversion rate (×1e6 text), prefilled with the market rate.
+  const [rateText, setRateText] = useState('');
+
+  const rateOf = (c: string) => (c === baseCurrency ? E6_ONE : (rates[c] ?? E6_ONE));
+  // Market rate origCurrency → target (×1e6): how many target units one old unit buys.
+  const marketRateE6 = (to: string) => Math.round((rateOf(origCurrency) * E6_ONE) / rateOf(to));
+  const currencyChanged = editingId != null && currency !== origCurrency;
   // For a seeded account we pre-fill the field with the localized display name;
   // { stored, display } lets onSubmit keep the original stored name when the
   // user leaves it unchanged, so its localization is preserved.
@@ -72,16 +87,20 @@ export function AccountSheet() {
           setName(display);
           seedNameRef.current = { stored: account.name, display };
           setCurrency(account.currency);
+          setOrigCurrency(account.currency);
           setKind(account.kind);
           setOpening(minorToAmountInput(account.openingMinor, account.currency));
         } else {
+          const base = useSettingsStore.getState().baseCurrency;
           setEditingId(null);
           setName('');
           seedNameRef.current = null;
-          setCurrency(useSettingsStore.getState().baseCurrency);
+          setCurrency(base);
+          setOrigCurrency(base);
           setKind('cash');
           setOpening('');
         }
+        setRateText('');
         sheetRef.current?.present();
         hapticLight();
       },
@@ -90,13 +109,42 @@ export function AccountSheet() {
   );
 
   const onSubmit = async () => {
-    const openingMinor = parseAmountToMinor(opening, currency) ?? 0;
     // Unchanged localized name → keep the original stored name (preserve i18n).
     const typed = name.trim();
     const resolvedName =
       seedNameRef.current && typed === seedNameRef.current.display
         ? seedNameRef.current.stored
         : typed || currency;
+
+    if (editingId && currencyChanged) {
+      // Currency switch: rewrite name/kind/opening (still in the OLD currency),
+      // then convert the whole account to the new currency at the entered rate.
+      const rateE6 = parseRateToE6(rateText) ?? marketRateE6(currency);
+      Alert.alert(
+        t('accountSheet.convertTitle'),
+        t('accountSheet.convertBody', { from: origCurrency, to: currency }),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          {
+            text: t('accountSheet.convertConfirm'),
+            onPress: async () => {
+              const openingMinor = parseAmountToMinor(opening, origCurrency) ?? 0;
+              await TransactionsController.updateAccount(editingId, {
+                name: resolvedName,
+                kind,
+                openingMinor,
+              });
+              await TransactionsController.changeAccountCurrency(editingId, currency, rateE6);
+              sheetRef.current?.dismiss();
+              hapticSuccess();
+            },
+          },
+        ],
+      );
+      return;
+    }
+
+    const openingMinor = parseAmountToMinor(opening, currency) ?? 0;
     if (editingId) {
       await TransactionsController.updateAccount(editingId, {
         name: resolvedName,
@@ -171,13 +219,33 @@ export function AccountSheet() {
           placeholderTextColor={palette.dim2}
         />
         <Text style={styles.formLabel}>{t('accountSheet.currencyLabel')}</Text>
-        {editingId ? (
-          <View style={styles.currencyLocked}>
-            <Text style={styles.currencyLockedText}>{currency}</Text>
-            <Text style={styles.currencyLockedHint}>{t('accountSheet.currencyLockedHint')}</Text>
-          </View>
-        ) : (
-          <CurrencyDropdown value={currency} onChange={setCurrency} />
+        <CurrencyDropdown
+          value={currency}
+          onChange={(c) => {
+            setCurrency(c);
+            // Prefill the editable conversion rate with the market rate.
+            if (editingId && c !== origCurrency) setRateText(formatRate(marketRateE6(c)));
+          }}
+        />
+        {currencyChanged && (
+          <>
+            <Text style={styles.formLabel}>{t('accountSheet.convertRateLabel')}</Text>
+            <View style={styles.amountRow}>
+              <Text style={styles.rateHint}>1 {origCurrency} =</Text>
+              <BottomSheetTextInput
+                style={styles.amountInput}
+                value={rateText}
+                onChangeText={(v) => setRateText(sanitizeRateInput(v))}
+                placeholder={formatRate(marketRateE6(currency))}
+                placeholderTextColor={palette.dim2}
+                keyboardType="decimal-pad"
+              />
+              <Text style={styles.amountCurrency}>{currency}</Text>
+            </View>
+            <Text style={styles.convertWarning}>
+              {t('accountSheet.convertWarning', { from: origCurrency, to: currency })}
+            </Text>
+          </>
         )}
         <Text style={styles.formLabel}>{t('accountSheet.openingBalanceLabel')}</Text>
         <View style={styles.amountRow}>
@@ -278,6 +346,8 @@ const makeStyles = (p: Palette) =>
       fontSize: Typography.headline.fontSize,
     },
     amountCurrency: { color: p.dim, fontSize: Typography.body.fontSize },
+    rateHint: { ...numberTextStyle, color: p.dim, fontSize: Typography.footnote.fontSize },
+    convertWarning: { color: p.warn, fontSize: Typography.caption.fontSize, lineHeight: 17 },
     kindRow: { flexDirection: 'row', gap: Spacing.sm },
     kindChip: {
       flexDirection: 'row',

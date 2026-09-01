@@ -5,6 +5,7 @@ import {
   convertFromBase,
   convertToBase,
   crossRateE6,
+  deriveRateToBaseE6,
   formatMoney,
   formatMoneyCompact,
   formatMoneyPlain,
@@ -69,6 +70,18 @@ describe('half-up rounding (ties away from zero)', () => {
     expect(convertFromBase(3, e6(2))).toBe(2);
     // −3 → −1.5 → −2
     expect(convertFromBase(-3, e6(2))).toBe(-2);
+  });
+
+  it('deriveRateToBaseE6 preserves an amount’s base value after currency change', () => {
+    // 100.00 USD at 3.27 → 327.00 base. Convert the amount to BYN (327.00) and the
+    // derived rate must reproduce the same 327.00 base value (rate 1.0).
+    const baseValue = convertToBase(10_000, e6(3.27)); // 32_700
+    const newAmount = 32_700; // same currency as base now
+    const newRate = deriveRateToBaseE6(newAmount, baseValue);
+    expect(newRate).toBe(e6(1));
+    expect(convertToBase(newAmount, newRate)).toBe(baseValue);
+    // Zero amount → 1:1 fallback, never a divide-by-zero.
+    expect(deriveRateToBaseE6(0, 500)).toBe(e6(1));
   });
 });
 

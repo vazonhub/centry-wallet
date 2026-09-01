@@ -201,6 +201,13 @@ export const en = {
     negativeTitle: 'Account in the red',
     negativeBody:
       '“{{name}}” has a negative balance. Top it up or review its records — you may have logged a spend from the wrong account.',
+    convertRateLabel: 'CONVERSION RATE',
+    convertWarning:
+      'Changing the currency converts the balance and every transaction on this account from {{from}} to {{to}} at this rate. This rewrites their recorded amounts and is hard to undo.',
+    convertTitle: 'Change currency?',
+    convertBody:
+      'All records on this account will be converted from {{from}} to {{to}} at the rate you set. History totals in the base currency stay the same.',
+    convertConfirm: 'Convert',
   },
   budgetSheet: {
     heading: 'Budget plan',

@@ -190,6 +190,47 @@ export async function softDeleteTransaction(id: Id, deletedAt: number): Promise<
   ]);
 }
 
+/** Every transaction on an account, including soft-deleted ones (for currency
+ * conversion, which must move all of an account's records to the new currency). */
+export async function listTransactionsForAccount(accountId: Id): Promise<Transaction[]> {
+  const db = getDb();
+  const rows = await db.getAllAsync<TransactionRow>(
+    `SELECT * FROM transactions WHERE account_id = ?;`,
+    [accountId],
+  );
+  return rows.map(mapRow);
+}
+
+/**
+ * Switches an account to a new currency in one transaction: rewrites the
+ * account's `currency` + `opening_minor` and every transaction's `amount_minor`,
+ * `currency` and `rate_to_base_e6` to the precomputed converted values. The
+ * caller (controller) does the money math (via @utils/money) so this stays a
+ * pure atomic write. This deliberately rewrites frozen rates (rule 2) — a rare,
+ * explicit, warned user action, like changing the base currency.
+ */
+export async function convertAccountCurrency(
+  accountId: Id,
+  newCurrency: string,
+  newOpeningMinor: number,
+  txUpdates: { id: Id; amountMinor: number; rateToBaseE6: number }[],
+  updatedAt: number,
+): Promise<void> {
+  const db = getDb();
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `UPDATE accounts SET currency = ?, opening_minor = ?, updated_at = ? WHERE id = ?;`,
+      [newCurrency, newOpeningMinor, updatedAt, accountId],
+    );
+    for (const u of txUpdates) {
+      await db.runAsync(
+        `UPDATE transactions SET amount_minor = ?, currency = ?, rate_to_base_e6 = ?, updated_at = ? WHERE id = ?;`,
+        [u.amountMinor, newCurrency, u.rateToBaseE6, updatedAt, u.id],
+      );
+    }
+  });
+}
+
 /** Both non-deleted legs of a transfer (source + destination), for editing. */
 export async function listTransferLegs(pairId: Id): Promise<Transaction[]> {
   const db = getDb();

@@ -4,7 +4,7 @@ import type { Account, Id } from '@models';
 import { getRateForNewTransaction } from '@services/rates';
 import { useSettingsStore } from '@stores/settings.store';
 import { currentTzOffsetMin, nowSec } from '@utils/date';
-import { localDay } from '@utils/money';
+import { applyCrossRate, convertToBase, deriveRateToBaseE6, localDay } from '@utils/money';
 import { buildTransaction, buildTransferPair, type TransactionDraft } from '@utils/transaction';
 import { uuid } from '@utils/uuid';
 
@@ -83,6 +83,37 @@ export interface UpdateAccountInput {
   kind: Account['kind'];
   /** Starting balance in the account's own currency (minor units). */
   openingMinor: number;
+}
+
+/**
+ * Switches an account to a new currency at the given from→to rate (×1e6). Every
+ * transaction on the account and its opening balance are converted to the new
+ * currency; each transaction's base value is preserved (its rate_to_base is
+ * re-derived) so History/stats totals don't move. Rewrites frozen rates
+ * (rule 2) — a deliberate, warned action. No-op if the currency is unchanged.
+ */
+async function changeAccountCurrency(id: Id, newCurrency: string, rateE6: number): Promise<void> {
+  const account = await AccountsRepo.getAccount(id);
+  if (!account || account.currency === newCurrency || rateE6 <= 0) return;
+  const oldCurrency = account.currency;
+
+  const txs = await TransactionsRepo.listTransactionsForAccount(id);
+  const newOpeningMinor = applyCrossRate(account.openingMinor, oldCurrency, rateE6, newCurrency);
+  const txUpdates = txs.map((t) => {
+    const amountMinor = applyCrossRate(t.amountMinor, oldCurrency, rateE6, newCurrency);
+    // Keep the base-currency value identical: re-derive the rate for the new amount.
+    const baseMinor = convertToBase(t.amountMinor, t.rateToBaseE6);
+    return { id: t.id, amountMinor, rateToBaseE6: deriveRateToBaseE6(amountMinor, baseMinor) };
+  });
+
+  await TransactionsRepo.convertAccountCurrency(
+    id,
+    newCurrency,
+    newOpeningMinor,
+    txUpdates,
+    nowSec(),
+  );
+  await DataController.loadAll();
 }
 
 /** Edits an account's name / kind / opening balance (currency is fixed — see repo). */
@@ -302,6 +333,7 @@ export const TransactionsController = {
   addTransfer,
   createAccount,
   updateAccount,
+  changeAccountCurrency,
   deleteAccount,
   reorderAccounts,
   editTransactionMeta,

@@ -17,7 +17,10 @@ interface HistoryState {
   incomeBaseMinor: number;
   outcomeBaseMinor: number;
   topCategories: TopCategory[];
+  /** True while a month is being loaded — drives the skeleton on first open. */
+  loading: boolean;
   setMonth(month: string): void;
+  setLoading(loading: boolean): void;
   setSnapshot(
     s: Partial<
       Pick<
@@ -38,8 +41,11 @@ export const useHistoryStore = create<HistoryState>((set) => ({
   incomeBaseMinor: 0,
   outcomeBaseMinor: 0,
   topCategories: EMPTY_TOP,
+  loading: true,
   setMonth: (month) => set({ month }),
-  setSnapshot: (s) => set(s),
+  setLoading: (loading) => set({ loading }),
+  // A completed load always clears the loading flag.
+  setSnapshot: (s) => set({ ...s, loading: false }),
 }));
 
 /** 'YYYY-MM' shifted by `delta` months. */

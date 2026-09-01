@@ -3,6 +3,7 @@ import { useHistoryStore } from '@stores/history.store';
 
 /** Loads a month's transactions + totals + top-5 categories into the history store. */
 async function loadMonth(month: string): Promise<void> {
+  useHistoryStore.getState().setLoading(true);
   const [transactions, totals, top, earliestMonth] = await Promise.all([
     TransactionsRepo.listTransactionsByMonth(month),
     TransactionsRepo.monthTotalsBaseMinor(month),

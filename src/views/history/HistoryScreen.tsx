@@ -17,8 +17,12 @@ import { useFocusEffect } from 'expo-router';
 import { FlashList } from '@shopify/flash-list';
 
 import { AppIcon } from '@components/AppIcon';
+import { GlassButton } from '@components/GlassButton';
 import { Money } from '@components/Money';
+import { Skeleton } from '@components/Skeleton';
+import { TransferAmount } from '@components/TransferAmount';
 import { openTransactionDetail } from '@components/transactionDetailRef';
+import { openWalletTotal } from '@components/walletTotalRef';
 import { EXPENSE_FALLBACK_ICON, INCOME_FALLBACK_ICON, TRANSFER_ICON } from '@constants/icons';
 import { HistoryController } from '@controllers/history.controller';
 import { usePalette } from '@hooks/usePalette';
@@ -46,6 +50,13 @@ type Row = { type: 'header'; day: string; net: number } | { type: 'tx'; tx: Tran
  */
 const COLLAPSE_MIN_SCROLL = 160;
 
+/** Height of the collapsed summary bar (keep in sync with styles.segBar). */
+const SEGBAR_H = 10;
+/** Half-base / height of the tooltip's downward caret. */
+const TOOLTIP_CARET = 6;
+/** How long the segment tooltip stays up before auto-dismissing (ms). */
+const TOOLTIP_TIMEOUT = 2600;
+
 export function HistoryScreen() {
   const { t } = useTranslation();
   const palette = usePalette();
@@ -65,6 +76,7 @@ export function HistoryScreen() {
   const income = useHistoryStore((s) => s.incomeBaseMinor);
   const outcome = useHistoryStore((s) => s.outcomeBaseMinor);
   const topCategories = useHistoryStore((s) => s.topCategories);
+  const loading = useHistoryStore((s) => s.loading);
 
   const accounts = useDataStore((s) => s.accounts);
   const categories = useDataStore((s) => s.categories);
@@ -75,10 +87,34 @@ export function HistoryScreen() {
     [categories],
   );
 
+  // First open of a month with nothing loaded yet → show skeletons (not the empty
+  // state). Switching months keeps the previous data visible until the new lands.
+  const firstLoad = loading && transactions.length === 0;
+
+  // Destination leg of each transfer, keyed by pair id (for "source → dest").
+  const transferToLeg = useMemo(() => {
+    const m = new Map<string, Transaction>();
+    for (const tr of transactions) {
+      if (tr.kind === 'transfer' && tr.amountMinor > 0 && tr.transferPairId) {
+        m.set(tr.transferPairId, tr);
+      }
+    }
+    return m;
+  }, [transactions]);
+
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
   // Collapse the per-category bars into one segmented bar once the feed scrolls.
   const [collapsed, setCollapsed] = useState(false);
+  // Tooltip over a tapped segment of the collapsed summary bar (icon + name +
+  // amount, centred on the segment). Layouts feed the horizontal positioning.
+  const [activeSeg, setActiveSeg] = useState<string | null>(null);
+  const [segBarW, setSegBarW] = useState(0);
+  const [tipW, setTipW] = useState(0);
+  const [segLayouts, setSegLayouts] = useState<Record<string, { x: number; width: number }>>({});
+  // In the expanded bars view a tapped row (bar or icon) shows a tooltip with
+  // its category name.
+  const [activeRow, setActiveRow] = useState<string | null>(null);
   // Month/year picker opened by tapping the month title.
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerYear, setPickerYear] = useState(() => parseInt(month.slice(0, 4), 10));
@@ -151,16 +187,49 @@ export function HistoryScreen() {
   const catSegments = useMemo(() => {
     const segs = topCategories
       .filter((tc) => tc.totalMinor > 0)
-      .map((tc) => ({
-        key: tc.categoryId ?? 'none',
-        color: (tc.categoryId ? categoryById[tc.categoryId]?.color : undefined) ?? palette.dim,
-        minor: tc.totalMinor,
-      }));
+      .map((tc) => {
+        const cat = tc.categoryId ? categoryById[tc.categoryId] : undefined;
+        return {
+          key: tc.categoryId ?? 'none',
+          color: cat?.color ?? palette.dim,
+          icon: cat?.icon as string | undefined,
+          name: cat ? displayCategoryName(cat) : t('history.noCategory'),
+          minor: tc.totalMinor,
+        };
+      });
     const sumTop = segs.reduce((s, x) => s + x.minor, 0);
     const other = outcome - sumTop;
-    if (other > 0) segs.push({ key: 'other', color: palette.dim2, minor: other });
+    if (other > 0)
+      segs.push({
+        key: 'other',
+        color: palette.dim2,
+        icon: undefined,
+        name: t('history.other'),
+        minor: other,
+      });
     return segs;
-  }, [topCategories, categoryById, outcome, palette]);
+  }, [topCategories, categoryById, outcome, palette, t]);
+
+  // Auto-dismiss the segment tooltip after a beat.
+  useEffect(() => {
+    if (!activeSeg) return;
+    const id = setTimeout(() => setActiveSeg(null), TOOLTIP_TIMEOUT);
+    return () => clearTimeout(id);
+  }, [activeSeg]);
+
+  const clearTips = useCallback(() => {
+    setActiveSeg(null);
+    setActiveRow(null);
+  }, []);
+
+  // Month change clears any open tooltip (the bars belong to the old month).
+  const goMonth = useCallback(
+    (m: string) => {
+      clearTips();
+      setMonth(m);
+    },
+    [clearTips, setMonth],
+  );
 
   // The list content vs. viewport heights — used to gate the collapse so it can
   // never enter a feedback loop when there is barely anything to scroll.
@@ -177,9 +246,13 @@ export function HistoryScreen() {
     if (!collapsed) {
       const maxScroll = contentH.current - viewportH.current;
       if (maxScroll <= COLLAPSE_MIN_SCROLL) return;
-      if (y > 56) setCollapsed(true);
+      if (y > 56) {
+        setCollapsed(true);
+        clearTips();
+      }
     } else if (y <= 24) {
       setCollapsed(false);
+      clearTips();
     }
   };
 
@@ -199,29 +272,34 @@ export function HistoryScreen() {
     hapticLight();
   };
   const pickMonth = (value: string) => {
-    setMonth(value);
+    goMonth(value);
     setPickerOpen(false);
     hapticLight();
   };
 
   const onRowPress = useCallback(
     (tx: Transaction) => {
-      openTransactionDetail(tx, () => void HistoryController.loadMonth(month));
+      const sibling = tx.transferPairId ? transferToLeg.get(tx.transferPairId) : undefined;
+      openTransactionDetail(tx, () => void HistoryController.loadMonth(month), sibling);
     },
-    [month],
+    [month, transferToLeg],
   );
 
   // Pinned above the scrolling list (owner: month bar fixed on scroll).
   const MonthBar = (
     <View style={styles.monthBar}>
       <View style={styles.monthNav}>
-        <Pressable
-          disabled={!canPrev}
-          onPress={() => setMonth(shiftMonth(month, -1))}
-          style={styles.navBtn}
+        <GlassButton
+          round
+          onPress={() => {
+            if (canPrev) goMonth(shiftMonth(month, -1));
+          }}
+          contentStyle={styles.navBtnContent}
+          style={!canPrev && styles.navBtnDisabled}
+          accessibilityLabel={t('history.prevMonth')}
         >
-          <Text style={[styles.navArrow, !canPrev && styles.navArrowDisabled]}>‹</Text>
-        </Pressable>
+          <AppIcon name="chevron-back" color={canPrev ? palette.ink : palette.dim2} size={22} />
+        </GlassButton>
         <Pressable
           onPress={openPicker}
           style={styles.monthTitleBtn}
@@ -232,13 +310,17 @@ export function HistoryScreen() {
             {formatMonth(month)}
           </Text>
         </Pressable>
-        <Pressable
-          disabled={!canNext}
-          onPress={() => setMonth(shiftMonth(month, 1))}
-          style={styles.navBtn}
+        <GlassButton
+          round
+          onPress={() => {
+            if (canNext) goMonth(shiftMonth(month, 1));
+          }}
+          contentStyle={styles.navBtnContent}
+          style={!canNext && styles.navBtnDisabled}
+          accessibilityLabel={t('history.nextMonth')}
         >
-          <Text style={[styles.navArrow, !canNext && styles.navArrowDisabled]}>›</Text>
-        </Pressable>
+          <AppIcon name="chevron-forward" color={canNext ? palette.ink : palette.dim2} size={22} />
+        </GlassButton>
       </View>
     </View>
   );
@@ -248,46 +330,82 @@ export function HistoryScreen() {
   const FixedStats = (
     <View style={styles.fixedStats}>
       <View style={styles.totals}>
-        <View style={styles.totalCard}>
+        <Pressable
+          style={styles.totalCard}
+          onPress={() => {
+            hapticLight();
+            openWalletTotal({ flow: 'income', mode: 'byTx' });
+          }}
+          accessibilityRole="button"
+        >
           <Text {...textProps('caption')} style={styles.totalLabel}>
             {t('history.income')}
           </Text>
-          <Money
-            minor={income}
-            currency={base}
-            style={styles.totalPos}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.7}
-          />
-        </View>
-        <View style={styles.totalCard}>
+          {firstLoad ? (
+            <Skeleton height={18} style={styles.totalSkeleton} />
+          ) : (
+            <Money
+              minor={income}
+              currency={base}
+              style={styles.totalPos}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            />
+          )}
+        </Pressable>
+        <Pressable
+          style={styles.totalCard}
+          onPress={() => {
+            hapticLight();
+            openWalletTotal({ flow: 'expense', mode: 'byTx' });
+          }}
+          accessibilityRole="button"
+        >
           <Text {...textProps('caption')} style={styles.totalLabel}>
             {t('history.outcome')}
           </Text>
-          <Money
-            minor={outcome}
-            currency={base}
-            style={styles.totalNeg}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.7}
-          />
-        </View>
-        <View style={styles.totalCard}>
+          {firstLoad ? (
+            <Skeleton height={18} style={styles.totalSkeleton} />
+          ) : (
+            <Money
+              minor={outcome}
+              currency={base}
+              style={styles.totalNeg}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            />
+          )}
+        </Pressable>
+        <Pressable
+          style={styles.totalCard}
+          onPress={() => {
+            hapticLight();
+            openWalletTotal({ flow: 'all', mode: 'byTx' });
+          }}
+          accessibilityRole="button"
+        >
           <Text {...textProps('caption')} style={styles.totalLabel}>
             {t('history.difference')}
           </Text>
-          <Money
-            minor={income - outcome}
-            currency={base}
-            options={{ showPlus: true }}
-            style={[styles.totalDiff, { color: income - outcome >= 0 ? palette.pos : palette.neg }]}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-            minimumFontScale={0.7}
-          />
-        </View>
+          {firstLoad ? (
+            <Skeleton height={18} style={styles.totalSkeleton} />
+          ) : (
+            <Money
+              minor={income - outcome}
+              currency={base}
+              options={{ showPlus: true }}
+              style={[
+                styles.totalDiff,
+                { color: income - outcome >= 0 ? palette.pos : palette.neg },
+              ]}
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
+            />
+          )}
+        </Pressable>
       </View>
 
       {outcome > 0 && catSegments.length > 0 && (
@@ -297,11 +415,70 @@ export function HistoryScreen() {
               key="seg"
               entering={FadeIn.duration(220)}
               exiting={FadeOut.duration(140)}
-              style={styles.segBar}
+              style={styles.segWrap}
             >
-              {catSegments.map((s) => (
-                <View key={s.key} style={{ flex: s.minor, backgroundColor: s.color }} />
-              ))}
+              <View style={styles.segBar} onLayout={(e) => setSegBarW(e.nativeEvent.layout.width)}>
+                {catSegments.map((s) => (
+                  <Pressable
+                    key={s.key}
+                    onLayout={(e) => {
+                      const { x, width } = e.nativeEvent.layout;
+                      setSegLayouts((prev) =>
+                        prev[s.key]?.x === x && prev[s.key]?.width === width
+                          ? prev
+                          : { ...prev, [s.key]: { x, width } },
+                      );
+                    }}
+                    onPress={() => {
+                      hapticLight();
+                      // Reset the measured width so the tooltip re-centres on the
+                      // new segment's content instead of flashing at a stale spot.
+                      setTipW(0);
+                      setActiveSeg((prev) => (prev === s.key ? null : s.key));
+                    }}
+                    style={{ flex: s.minor, backgroundColor: s.color }}
+                  />
+                ))}
+              </View>
+              {activeSeg &&
+                (() => {
+                  const seg = catSegments.find((s) => s.key === activeSeg);
+                  const L = segLayouts[activeSeg];
+                  if (!seg || !L) return null;
+                  const centerX = L.x + L.width / 2;
+                  // Centre the card on the segment, clamped inside the bar's width.
+                  const left =
+                    tipW > 0
+                      ? Math.max(0, Math.min(centerX - tipW / 2, Math.max(0, segBarW - tipW)))
+                      : centerX;
+                  const caretLeft = Math.max(
+                    TOOLTIP_CARET,
+                    Math.min(centerX - left - TOOLTIP_CARET, Math.max(0, tipW - TOOLTIP_CARET * 3)),
+                  );
+                  return (
+                    <View style={[styles.tooltipAbs, { left, opacity: tipW > 0 ? 1 : 0 }]}>
+                      <View
+                        style={styles.tipCard}
+                        onLayout={(e) => setTipW(e.nativeEvent.layout.width)}
+                      >
+                        <View style={styles.tooltipRow}>
+                          {seg.icon ? (
+                            <AppIcon name={seg.icon} color={seg.color} size={14} />
+                          ) : (
+                            <View style={[styles.tipDot, { backgroundColor: seg.color }]} />
+                          )}
+                          <Text style={styles.tipName} numberOfLines={1}>
+                            {seg.name}
+                          </Text>
+                          <Money minor={seg.minor} currency={base} style={styles.tipAmount} />
+                        </View>
+                      </View>
+                      {/* Caret is a sibling of the card (not a padded child) so its
+                          x is measured in the same box as `left` — no padding skew. */}
+                      <View style={[styles.caretTriangle, styles.caretAbs, { left: caretLeft }]} />
+                    </View>
+                  );
+                })()}
             </Animated.View>
           ) : (
             <Animated.View
@@ -313,8 +490,17 @@ export function HistoryScreen() {
               {topCategories.map((tc) => {
                 const cat = tc.categoryId ? categoryById[tc.categoryId] : undefined;
                 const frac = maxTop > 0 ? tc.totalMinor / maxTop : 0;
+                const key = tc.categoryId ?? 'none';
+                const showName = activeRow === key;
                 return (
-                  <View key={tc.categoryId ?? 'none'} style={styles.barRow}>
+                  <Pressable
+                    key={key}
+                    style={styles.barRow}
+                    onPress={() => {
+                      hapticLight();
+                      setActiveRow((prev) => (prev === key ? null : key));
+                    }}
+                  >
                     <View style={styles.barIcon}>
                       <AppIcon name={cat?.icon} color={cat?.color ?? palette.dim} size={18} />
                     </View>
@@ -330,7 +516,21 @@ export function HistoryScreen() {
                       />
                     </View>
                     <Money minor={tc.totalMinor} currency={base} style={styles.barValue} />
-                  </View>
+                    {showName && (
+                      <View style={styles.rowTipWrap} pointerEvents="none">
+                        <View style={[styles.tipCard, styles.rowTipCard]}>
+                          <View style={styles.tooltipRow}>
+                            <AppIcon name={cat?.icon} color={cat?.color ?? palette.dim} size={14} />
+                            <Text style={styles.tipName} numberOfLines={1}>
+                              {cat ? displayCategoryName(cat) : t('history.noCategory')}
+                            </Text>
+                          </View>
+                        </View>
+                        {/* Caret centred under the card by the wrap's alignItems. */}
+                        <View style={styles.caretTriangle} />
+                      </View>
+                    )}
+                  </Pressable>
                 );
               })}
             </Animated.View>
@@ -470,9 +670,17 @@ export function HistoryScreen() {
             }}
             ListHeaderComponent={Header}
             ListEmptyComponent={
-              <Text {...textProps('footnote')} style={styles.empty}>
-                {t('history.emptyMonth')}
-              </Text>
+              firstLoad ? (
+                <View style={styles.feedSkeleton}>
+                  {[0, 1, 2, 3, 4, 5].map((i) => (
+                    <Skeleton key={i} height={48} radius={Radius.listRow} />
+                  ))}
+                </View>
+              ) : (
+                <Text {...textProps('footnote')} style={styles.empty}>
+                  {t('history.emptyMonth')}
+                </Text>
+              )
             }
             keyExtractor={(row) => (row.type === 'header' ? `h:${row.day}` : `t:${row.tx.id}`)}
             getItemType={(row) => row.type}
@@ -518,15 +726,31 @@ export function HistoryScreen() {
                   <Text {...textProps('row')} style={styles.rowTitle} numberOfLines={1}>
                     {title}
                   </Text>
-                  <Money
-                    minor={tx.amountMinor}
-                    currency={tx.currency}
-                    options={{ showPlus: !isTransfer }}
-                    style={[
-                      styles.rowAmount,
-                      { color: tx.amountMinor >= 0 && !isTransfer ? palette.pos : palette.ink },
-                    ]}
-                  />
+                  {isTransfer ? (
+                    (() => {
+                      const toLeg = tx.transferPairId
+                        ? transferToLeg.get(tx.transferPairId)
+                        : undefined;
+                      return (
+                        <TransferAmount
+                          fromMinorAbs={Math.abs(tx.amountMinor)}
+                          fromCurrency={tx.currency}
+                          toMinorAbs={Math.abs(toLeg?.amountMinor ?? tx.amountMinor)}
+                          toCurrency={toLeg?.currency ?? tx.currency}
+                        />
+                      );
+                    })()
+                  ) : (
+                    <Money
+                      minor={tx.amountMinor}
+                      currency={tx.currency}
+                      options={{ showPlus: true }}
+                      style={[
+                        styles.rowAmount,
+                        { color: tx.amountMinor >= 0 ? palette.pos : palette.ink },
+                      ]}
+                    />
+                  )}
                 </Pressable>
               );
             }}
@@ -563,6 +787,9 @@ const makeStyles = (p: Palette) =>
     navBtn: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.xs },
     navArrow: { color: p.ink, fontSize: 28, fontWeight: '400' },
     navArrowDisabled: { color: p.dim2, opacity: 0.4 },
+    // Month prev/next: same liquid-glass affordance as the Settings back button.
+    navBtnContent: { width: 38, height: 38 },
+    navBtnDisabled: { opacity: 0.5 },
     monthTitleBtn: { flexShrink: 1, alignItems: 'center' },
     monthTitle: { color: p.ink, fontSize: Typography.title.fontSize, fontWeight: '700' },
     // Month/year picker (tap the month title).
@@ -611,6 +838,8 @@ const makeStyles = (p: Palette) =>
       gap: 2,
     },
     totalLabel: { color: p.dim },
+    totalSkeleton: { marginTop: 4 },
+    feedSkeleton: { gap: Spacing.sm, paddingTop: Spacing.md },
     totalPos: { ...numberTextStyle, color: p.pos, fontSize: Typography.headline.fontSize },
     totalNeg: { ...numberTextStyle, color: p.neg, fontSize: Typography.headline.fontSize },
     totalDiff: { ...numberTextStyle, fontSize: Typography.headline.fontSize },
@@ -642,16 +871,73 @@ const makeStyles = (p: Palette) =>
     // "категории трат" heading previously added the gap).
     topBlock: { gap: Spacing.sm },
     barRows: { gap: Spacing.sm },
+    // Relative wrapper so the tap tooltip can float above the segmented bar.
+    segWrap: { position: 'relative' },
     segBar: {
       flexDirection: 'row',
       // Same thickness as an expanded category bar (barTrack) so the collapsed
       // summary line reads as the same object, just condensed.
-      height: 10,
+      height: SEGBAR_H,
       borderRadius: Radius.pill,
       overflow: 'hidden',
       gap: 2,
       backgroundColor: p.glassLightBg,
     },
+    // Shared floating-tooltip card (icon/dot + name [+ amount]) with a downward
+    // caret. Used both over a collapsed-bar segment and over an expanded row.
+    tipCard: {
+      backgroundColor: p.sheetBg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: p.glassBorder,
+      borderRadius: Radius.md,
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      shadowColor: p.ink,
+      shadowOpacity: 0.18,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 4 },
+    },
+    // Collapsed-bar tooltip: an unpadded wrapper placed above the bar (x set
+    // inline). Holds the card + caret as siblings so the caret shares the card's
+    // measurement box (no padding skew).
+    tooltipAbs: {
+      position: 'absolute',
+      bottom: SEGBAR_H + TOOLTIP_CARET,
+      alignItems: 'flex-start',
+      maxWidth: '100%',
+      zIndex: 20,
+    },
+    // Expanded-row tooltip: card + caret stacked and centred, sitting just above
+    // the bar itself (the bar is vertically centred in the row, so anchor the
+    // caret near the row's mid-line rather than above the whole row).
+    rowTipWrap: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: '50%',
+      alignItems: 'center',
+      paddingBottom: 2,
+      zIndex: 30,
+    },
+    rowTipCard: { maxWidth: '90%' },
+    tooltipRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    tipDot: { width: 12, height: 12, borderRadius: 6 },
+    tipName: { color: p.ink, fontSize: Typography.footnote.fontSize, maxWidth: 180 },
+    tipAmount: { ...numberTextStyle, color: p.dim, fontSize: Typography.footnote.fontSize },
+    // Downward caret triangle (colour = card bg). Positioned absolutely under the
+    // collapsed tooltip (with caretAbs + inline left) or in-flow under the
+    // expanded row card (centred by the wrap).
+    caretTriangle: {
+      width: 0,
+      height: 0,
+      borderLeftWidth: TOOLTIP_CARET,
+      borderRightWidth: TOOLTIP_CARET,
+      borderTopWidth: TOOLTIP_CARET,
+      borderLeftColor: hexToRgba(p.sheetBg, 0),
+      borderRightColor: hexToRgba(p.sheetBg, 0),
+      borderTopColor: p.sheetBg,
+    },
+    caretAbs: { position: 'absolute', bottom: -TOOLTIP_CARET },
     barRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
     barIcon: { width: 24, alignItems: 'center' },
     barTrack: {

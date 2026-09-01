@@ -121,9 +121,12 @@ export function InputSheet() {
     setCreateTarget(null);
   }, [lastAccountId, accounts]);
 
-  const handleChange = useCallback(
-    (index: number) => {
-      if (index < 0) return;
+  const handleOpen = useCallback(
+    (fromIndex: number, toIndex: number) => {
+      // Reset ONLY on the open transition (closed → open), at the START of the
+      // animation. Doing it on onChange (which fires when the sheet settles) wiped
+      // anything the user typed during the open animation.
+      if (fromIndex !== -1 || toIndex < 0) return;
       resetForm();
       // Apply a Siri/App-Intent prefill on top of the fresh form (etap 8). The
       // amount is entered in the selected account's currency; sanitize it so it
@@ -336,7 +339,7 @@ export function InputSheet() {
       backdropComponent={renderBackdrop}
       backgroundStyle={styles.sheetBg}
       handleIndicatorStyle={styles.handle}
-      onChange={handleChange}
+      onAnimate={handleOpen}
     >
       <BottomSheetScrollView contentContainerStyle={styles.container}>
         {createTarget !== null ? (
@@ -439,11 +442,13 @@ export function InputSheet() {
                 )}
                 {transfer && !transfer.sameCurrency && fromAccount && toAccount && (
                   <>
-                    <Text style={styles.label}>{t('input.rate')}</Text>
-                    <View style={styles.amountRow}>
+                    <Text style={styles.label}>{t('input.rateAndTotal')}</Text>
+                    {/* Left = rate, right = final; ≈ between. Editing either side
+                        recomputes the other (both always show current values). */}
+                    <View style={styles.crossRow}>
                       <Text style={styles.rateHint}>1 {fromAccount.currency} =</Text>
                       <BottomSheetTextInput
-                        style={styles.amountSmall}
+                        style={styles.crossInput}
                         value={
                           transferOverride?.mode === 'rate'
                             ? transferOverride.text
@@ -456,15 +461,14 @@ export function InputSheet() {
                         placeholderTextColor={palette.dim2}
                         keyboardType="decimal-pad"
                       />
-                      <Text style={styles.currency}>{toAccount.currency}</Text>
-                    </View>
-                    <Text style={styles.label}>
-                      {t('input.total', { currency: toAccount.currency })}
-                    </Text>
-                    <View style={styles.amountRow}>
+                      <Text style={styles.approx}>≈</Text>
                       <BottomSheetTextInput
-                        style={styles.amountSmall}
-                        value={transferOverride?.mode === 'final' ? transferOverride.text : ''}
+                        style={styles.crossInput}
+                        value={
+                          transferOverride?.mode === 'final'
+                            ? transferOverride.text
+                            : formatMoney(transfer.toMinor, toAccount.currency, { hideCode: true })
+                        }
                         onChangeText={(v) =>
                           setTransferOverride({
                             mode: 'final',
@@ -477,9 +481,7 @@ export function InputSheet() {
                         placeholderTextColor={palette.dim2}
                         keyboardType="decimal-pad"
                       />
-                      <Text style={styles.rateHint}>
-                        ≈ {formatMoney(transfer.toMinor, toAccount.currency)}
-                      </Text>
+                      <Text style={styles.currency}>{toAccount.currency}</Text>
                     </View>
                   </>
                 )}
@@ -608,15 +610,22 @@ const makeStyles = (p: Palette) =>
       minWidth: 120,
       textAlign: 'right',
     },
-    amountSmall: {
-      ...numberTextStyle,
-      color: p.ink,
-      fontSize: Typography.title.fontSize,
-      minWidth: 100,
-      textAlign: 'right',
-    },
     currency: { ...numberTextStyle, color: p.dim, fontSize: Typography.title.fontSize },
     rateHint: { ...numberTextStyle, color: p.dim, fontSize: Typography.footnote.fontSize },
+    // Cross-currency: [1 FROM =] [rate] ≈ [final] [TO] on one line.
+    crossRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    crossInput: {
+      ...numberTextStyle,
+      flex: 1,
+      color: p.ink,
+      fontSize: Typography.headline.fontSize,
+      textAlign: 'center',
+      paddingVertical: Spacing.sm,
+      paddingHorizontal: Spacing.sm,
+      borderRadius: Radius.md,
+      backgroundColor: p.glassLightBg,
+    },
+    approx: { ...numberTextStyle, color: p.dim, fontSize: Typography.title.fontSize },
     chipsRow: { gap: Spacing.sm, paddingVertical: Spacing.xs, flexDirection: 'row' },
     // Full-bleed horizontal chip lists: the ScrollView breaks out of the sheet's
     // screen padding so the list scrolls edge-to-edge, while the content keeps

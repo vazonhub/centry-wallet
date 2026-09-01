@@ -21,6 +21,7 @@ interface CentryNative {
 const native = requireOptionalNativeModule<CentryNative>('CentryNative');
 
 const STATS_KEY = 'stats';
+const ACCOUNTS_KEY = 'accounts';
 const PENDING_ADD_KEY = 'pendingAdd';
 
 /** Preformatted display strings (money is formatted by @utils/money, rule 7). */
@@ -34,6 +35,14 @@ export interface PendingAdd {
   kind?: 'expense' | 'income' | 'transfer';
   amount?: string;
   note?: string;
+  accountId?: string;
+}
+
+/** Account option offered by the "Add" App Intents' account parameter. */
+export interface SiriAccount {
+  id: string;
+  name: string;
+  currency: string;
 }
 
 /** Writes the stats summary the info App Intents read. Best-effort, iOS only. */
@@ -42,6 +51,15 @@ export function writeSiriStats(stats: SiriStats): void {
     native?.setItem(STATS_KEY, JSON.stringify(stats));
   } catch {
     // Best-effort: never break a data refresh over the widget/Siri channel.
+  }
+}
+
+/** Writes the account list the "Add" intents offer as the account parameter. */
+export function writeSiriAccounts(accounts: SiriAccount[]): void {
+  try {
+    native?.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
+  } catch {
+    // Best-effort.
   }
 }
 

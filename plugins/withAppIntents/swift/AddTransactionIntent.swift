@@ -13,7 +13,7 @@ enum CentryStore {
   static let suite = "group.by.vazon.centry"
 
   /// Persists an Add prefill for the app to pick up on next activation.
-  static func writePendingAdd(kind: String, amount: Double?, note: String?) {
+  static func writePendingAdd(kind: String, amount: Double?, note: String?, accountId: String?) {
     var dict: [String: Any] = ["kind": kind]
     if let amount, amount > 0 {
       // Whole number when possible ("12"), else a decimal string the TS side
@@ -22,6 +22,9 @@ enum CentryStore {
     }
     if let note = note?.trimmingCharacters(in: .whitespaces), !note.isEmpty {
       dict["note"] = note
+    }
+    if let accountId, !accountId.isEmpty {
+      dict["accountId"] = accountId
     }
     if let data = try? JSONSerialization.data(withJSONObject: dict),
       let json = String(data: data, encoding: .utf8)
@@ -52,9 +55,12 @@ struct AddExpenseIntent: AppIntent {
   @Parameter(title: "Note")
   var note: String?
 
+  @Parameter(title: "Account")
+  var account: CentryAccountEntity?
+
   @MainActor
   func perform() async throws -> some IntentResult {
-    CentryStore.writePendingAdd(kind: "expense", amount: amount, note: note)
+    CentryStore.writePendingAdd(kind: "expense", amount: amount, note: note, accountId: account?.id)
     return .result()
   }
 }
@@ -71,9 +77,12 @@ struct AddIncomeIntent: AppIntent {
   @Parameter(title: "Note")
   var note: String?
 
+  @Parameter(title: "Account")
+  var account: CentryAccountEntity?
+
   @MainActor
   func perform() async throws -> some IntentResult {
-    CentryStore.writePendingAdd(kind: "income", amount: amount, note: note)
+    CentryStore.writePendingAdd(kind: "income", amount: amount, note: note, accountId: account?.id)
     return .result()
   }
 }

@@ -135,12 +135,18 @@ export function InputSheet() {
       if (!prefill) return;
       if (prefill.kind) setKind(prefill.kind);
       if (prefill.note) setNote(prefill.note);
+      // Siri may name a target account — preselect it (drives the amount currency).
+      const chosen = prefill.accountId
+        ? accounts.find((a) => a.id === prefill.accountId)
+        : undefined;
+      if (chosen) setAccountId(chosen.id);
       if (prefill.amount) {
-        const initial =
+        const forAmount =
+          chosen ??
           accounts.find((a) => a.id === lastAccountId) ??
           accounts.find((a) => a.isDefault) ??
           accounts[0];
-        setAmount(sanitizeAmountInput(prefill.amount, initial?.currency ?? base));
+        setAmount(sanitizeAmountInput(prefill.amount, forAmount?.currency ?? base));
       }
     },
     [resetForm, accounts, lastAccountId, base],

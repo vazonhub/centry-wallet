@@ -26,7 +26,10 @@ export function useSiriPrefill(): void {
       if (pending.kind) prefill.kind = pending.kind;
       if (pending.amount) prefill.amount = pending.amount;
       if (pending.note) prefill.note = pending.note;
-      const hasPrefill = Boolean(prefill.kind || prefill.amount || prefill.note);
+      if (pending.accountId) prefill.accountId = pending.accountId;
+      const hasPrefill = Boolean(
+        prefill.kind || prefill.amount || prefill.note || prefill.accountId,
+      );
       const siriEnabled = useSettingsStore.getState().inputSiri;
       openInputSheet(hasPrefill && siriEnabled ? prefill : undefined);
     };

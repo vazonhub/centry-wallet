@@ -42,6 +42,15 @@ export function refreshWidgetSnapshot(): void {
         settings.budgetPlan.period === 'month'
           ? i18n.t('widget.periodMonth')
           : i18n.t('widget.periodWeek'),
+      allowanceTitle: i18n.t('widget.allowanceTitle'),
+      spentLabel: i18n.t('widget.spent'),
+      forPeriodLabel: i18n.t('widget.forPeriod', {
+        period:
+          settings.budgetPlan.period === 'month'
+            ? i18n.t('widget.periodMonth')
+            : i18n.t('widget.periodWeek'),
+      }),
+      emptyLabel: i18n.t('widget.empty'),
       transferLabel: i18n.t('widget.transfer'),
       noCategoryLabel: i18n.t('widget.noCategory'),
       resolveAccountName: displayAccountName,

@@ -149,6 +149,25 @@ export async function updateTransactionAmount(
   ]);
 }
 
+/**
+ * Moves a transaction to another account. The caller guarantees the target
+ * account has the SAME currency — `accountBalanceMinor` sums `amount_minor`
+ * without conversion (a transaction's currency always matches its account), so a
+ * cross-currency move would corrupt both accounts' balances.
+ */
+export async function updateTransactionAccount(
+  id: Id,
+  accountId: Id,
+  updatedAt: number,
+): Promise<void> {
+  const db = getDb();
+  await db.runAsync(`UPDATE transactions SET account_id = ?, updated_at = ? WHERE id = ?;`, [
+    accountId,
+    updatedAt,
+    id,
+  ]);
+}
+
 export async function updateTransactionDate(
   id: Id,
   occurredAt: number,
@@ -169,6 +188,45 @@ export async function softDeleteTransaction(id: Id, deletedAt: number): Promise<
     deletedAt,
     id,
   ]);
+}
+
+/** Both non-deleted legs of a transfer (source + destination), for editing. */
+export async function listTransferLegs(pairId: Id): Promise<Transaction[]> {
+  const db = getDb();
+  const rows = await db.getAllAsync<TransactionRow>(
+    `SELECT * FROM transactions WHERE transfer_pair_id = ? AND deleted_at IS NULL;`,
+    [pairId],
+  );
+  return rows.map(mapRow);
+}
+
+/** Moves both legs of a transfer to a new date (keeps them on the same day). */
+export async function updateTransferDate(
+  pairId: Id,
+  occurredAt: number,
+  localDay: string,
+  updatedAt: number,
+): Promise<void> {
+  const db = getDb();
+  await db.runAsync(
+    `UPDATE transactions SET occurred_at = ?, local_day = ?, updated_at = ?
+     WHERE transfer_pair_id = ? AND deleted_at IS NULL;`,
+    [occurredAt, localDay, updatedAt, pairId],
+  );
+}
+
+/** Sets the note on both legs of a transfer (the note is shared). */
+export async function updateTransferNote(
+  pairId: Id,
+  note: string | null,
+  updatedAt: number,
+): Promise<void> {
+  const db = getDb();
+  await db.runAsync(
+    `UPDATE transactions SET note = ?, updated_at = ?
+     WHERE transfer_pair_id = ? AND deleted_at IS NULL;`,
+    [note, updatedAt, pairId],
+  );
 }
 
 /**
@@ -306,6 +364,69 @@ export async function txDeltasSince(
     currency: r.currency,
     amountMinor: r.amount_minor,
     localDay: r.local_day,
+  }));
+}
+
+/**
+ * Per-day income and expense totals (base minor units) since a local day, for
+ * the wallet-total sheet's income/expense chart flows. Transfers are excluded
+ * (internal moves, not income/expense — mirrors {@link monthTotalsBaseMinor}).
+ * `accountIds`, when given, restricts to those accounts (empty → no rows).
+ */
+export async function flowByDaySince(
+  sinceLocalDay: string,
+  accountIds?: string[],
+): Promise<{ localDay: string; incomeBaseMinor: number; expenseBaseMinor: number }[]> {
+  if (accountIds && accountIds.length === 0) return [];
+  const db = getDb();
+  const filter = accountIds ? ` AND account_id IN (${accountIds.map(() => '?').join(',')})` : '';
+  const rows = await db.getAllAsync<{
+    local_day: string;
+    income: number | null;
+    expense: number | null;
+  }>(
+    `SELECT local_day,
+       SUM(CASE WHEN amount_minor > 0 THEN  amount_minor * rate_to_base_e6 / 1000000 ELSE 0 END) AS income,
+       SUM(CASE WHEN amount_minor < 0 THEN -amount_minor * rate_to_base_e6 / 1000000 ELSE 0 END) AS expense
+     FROM transactions
+     WHERE deleted_at IS NULL AND kind != 'transfer' AND local_day >= ?${filter}
+     GROUP BY local_day ORDER BY local_day ASC;`,
+    [sinceLocalDay, ...(accountIds ?? [])],
+  );
+  return rows.map((r) => ({
+    localDay: r.local_day,
+    incomeBaseMinor: r.income ?? 0,
+    expenseBaseMinor: r.expense ?? 0,
+  }));
+}
+
+/**
+ * Non-transfer transactions since a local day (ascending), each with its frozen
+ * base rate, for the by-transaction income/expense chart flow. The caller splits
+ * income vs expense by sign. `accountIds`, when given, restricts the set.
+ */
+export async function flowTxSince(
+  sinceLocalDay: string,
+  accountIds?: string[],
+): Promise<{ localDay: string; amountMinor: number; rateToBaseE6: number }[]> {
+  if (accountIds && accountIds.length === 0) return [];
+  const db = getDb();
+  const filter = accountIds ? ` AND account_id IN (${accountIds.map(() => '?').join(',')})` : '';
+  const rows = await db.getAllAsync<{
+    local_day: string;
+    amount_minor: number;
+    rate_to_base_e6: number;
+  }>(
+    `SELECT local_day, amount_minor, rate_to_base_e6
+     FROM transactions
+     WHERE deleted_at IS NULL AND kind != 'transfer' AND local_day >= ?${filter}
+     ORDER BY occurred_at ASC, created_at ASC;`,
+    [sinceLocalDay, ...(accountIds ?? [])],
+  );
+  return rows.map((r) => ({
+    localDay: r.local_day,
+    amountMinor: r.amount_minor,
+    rateToBaseE6: r.rate_to_base_e6,
   }));
 }
 

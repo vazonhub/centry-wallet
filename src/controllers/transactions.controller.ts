@@ -177,12 +177,41 @@ async function addTransfer(input: AddTransferInput): Promise<void> {
   await DataController.loadAll();
 }
 
-/** Edits a transaction's category/note. */
+/** Edits a transaction's category/note. For transfers the note syncs both legs. */
 async function editTransactionMeta(
   id: Id,
   fields: { categoryId?: Id | null; note?: string | null },
 ): Promise<void> {
-  await TransactionsRepo.updateTransactionMeta(id, fields, nowSec());
+  const now = nowSec();
+  const tx = await TransactionsRepo.getTransaction(id);
+  if (tx?.transferPairId && 'note' in fields) {
+    // Transfers have no category; only the shared note applies, to both legs.
+    await TransactionsRepo.updateTransferNote(tx.transferPairId, fields.note ?? null, now);
+  } else {
+    await TransactionsRepo.updateTransactionMeta(id, fields, now);
+  }
+  await DataController.loadAll();
+}
+
+/**
+ * Edits a cross-account transfer's amounts (B12): the source magnitude out of the
+ * from-account and the destination magnitude into the to-account. Both legs are
+ * updated together so neither account's balance is left skewed; the from→to rate
+ * is implied by the two amounts (no separate rate column). Frozen base rates are
+ * currency→base and amount-independent, so they are untouched (rule 2).
+ */
+async function editTransfer(
+  pairId: Id,
+  amounts: { fromMinorAbs: number; toMinorAbs: number },
+): Promise<void> {
+  const legs = await TransactionsRepo.listTransferLegs(pairId);
+  const fromLeg = legs.find((l) => l.amountMinor < 0);
+  const toLeg = legs.find((l) => l.amountMinor > 0);
+  if (!fromLeg || !toLeg) return;
+  if (amounts.fromMinorAbs <= 0 || amounts.toMinorAbs <= 0) return;
+  const now = nowSec();
+  await TransactionsRepo.updateTransactionAmount(fromLeg.id, -Math.abs(amounts.fromMinorAbs), now);
+  await TransactionsRepo.updateTransactionAmount(toLeg.id, Math.abs(amounts.toMinorAbs), now);
   await DataController.loadAll();
 }
 
@@ -201,10 +230,57 @@ async function editTransactionAmount(
   await DataController.loadAll();
 }
 
-/** Moves a transaction to another date (recomputes its local_day, rule 8). */
+/**
+ * Moves a transaction to another account. Only same-currency moves are allowed
+ * (the target must match the transaction's currency, since account balances sum
+ * amounts without conversion). Not for transfers — their two legs are bound to
+ * specific accounts. Throws on a currency mismatch.
+ */
+async function editTransactionAccount(id: Id, accountId: Id): Promise<void> {
+  const tx = await TransactionsRepo.getTransaction(id);
+  if (!tx || tx.transferPairId) return;
+  const account = await AccountsRepo.getAccount(accountId);
+  if (!account) return;
+  if (account.currency !== tx.currency) {
+    throw new Error('Cannot move a transaction to an account in a different currency.');
+  }
+  await TransactionsRepo.updateTransactionAccount(id, accountId, nowSec());
+  await DataController.loadAll();
+}
+
+/**
+ * Reassigns one leg of a transfer to another account of the SAME currency (the
+ * leg's amount is in that currency; a different currency would corrupt balances).
+ * The two legs must stay on different accounts. Throws on a currency mismatch.
+ */
+async function editTransferAccount(pairId: Id, side: 'from' | 'to', accountId: Id): Promise<void> {
+  const legs = await TransactionsRepo.listTransferLegs(pairId);
+  const fromLeg = legs.find((l) => l.amountMinor < 0);
+  const toLeg = legs.find((l) => l.amountMinor > 0);
+  const leg = side === 'from' ? fromLeg : toLeg;
+  const other = side === 'from' ? toLeg : fromLeg;
+  if (!leg || !other) return;
+  if (accountId === other.accountId || accountId === leg.accountId) return;
+  const account = await AccountsRepo.getAccount(accountId);
+  if (!account) return;
+  if (account.currency !== leg.currency) {
+    throw new Error('Cannot move a transfer leg to an account in a different currency.');
+  }
+  await TransactionsRepo.updateTransactionAccount(leg.id, accountId, nowSec());
+  await DataController.loadAll();
+}
+
+/** Moves a transaction to another date (recomputes its local_day, rule 8). For
+ * transfers both legs move together so they stay grouped on the same day. */
 async function editTransactionDate(id: Id, occurredAtSec: number): Promise<void> {
   const day = localDay(occurredAtSec, currentTzOffsetMin());
-  await TransactionsRepo.updateTransactionDate(id, occurredAtSec, day, nowSec());
+  const now = nowSec();
+  const tx = await TransactionsRepo.getTransaction(id);
+  if (tx?.transferPairId) {
+    await TransactionsRepo.updateTransferDate(tx.transferPairId, occurredAtSec, day, now);
+  } else {
+    await TransactionsRepo.updateTransactionDate(id, occurredAtSec, day, now);
+  }
   await DataController.loadAll();
 }
 
@@ -230,6 +306,9 @@ export const TransactionsController = {
   reorderAccounts,
   editTransactionMeta,
   editTransactionAmount,
+  editTransactionAccount,
+  editTransfer,
+  editTransferAccount,
   editTransactionDate,
   deleteTransaction,
 };

@@ -436,37 +436,41 @@ export function TransactionDetailSheet() {
               </>
             )}
             {!isTransfer && (
-              <>
-                <Text style={styles.sectionTitle}>{t('detail.account')}</Text>
+              <View style={styles.fieldRow}>
+                <Text style={styles.fieldRowLabel}>{t('detail.account')}</Text>
                 <AccountDropdown
                   value={tx.accountId}
                   accounts={detailAccounts}
                   onChange={(id) => void onPickAccount(id)}
                 />
-              </>
+              </View>
             )}
 
             {isTransfer && transferEdit && (
-              <>
-                <Text style={styles.sectionTitle}>{t('detail.fromAccount')}</Text>
-                <AccountDropdown
-                  value={transferEdit.from.accountId}
-                  accounts={accounts.filter(
-                    (a) =>
-                      a.currency === transferEdit.fromCur && a.id !== transferEdit.to.accountId,
-                  )}
-                  onChange={(id) => void onPickTransferAccount('from', id)}
-                />
-                <Text style={styles.sectionTitle}>{t('detail.toAccount')}</Text>
-                <AccountDropdown
-                  value={transferEdit.to.accountId}
-                  accounts={accounts.filter(
-                    (a) =>
-                      a.currency === transferEdit.toCur && a.id !== transferEdit.from.accountId,
-                  )}
-                  onChange={(id) => void onPickTransferAccount('to', id)}
-                />
-              </>
+              <View style={styles.fromToRow}>
+                <View style={styles.fromToCol}>
+                  <Text style={styles.sectionTitle}>{t('detail.fromAccount')}</Text>
+                  <AccountDropdown
+                    value={transferEdit.from.accountId}
+                    accounts={accounts.filter(
+                      (a) =>
+                        a.currency === transferEdit.fromCur && a.id !== transferEdit.to.accountId,
+                    )}
+                    onChange={(id) => void onPickTransferAccount('from', id)}
+                  />
+                </View>
+                <View style={styles.fromToCol}>
+                  <Text style={styles.sectionTitle}>{t('detail.toAccount')}</Text>
+                  <AccountDropdown
+                    value={transferEdit.to.accountId}
+                    accounts={accounts.filter(
+                      (a) =>
+                        a.currency === transferEdit.toCur && a.id !== transferEdit.from.accountId,
+                    )}
+                    onChange={(id) => void onPickTransferAccount('to', id)}
+                  />
+                </View>
+              </View>
             )}
 
             <View style={styles.detailRows}>
@@ -607,8 +611,20 @@ const makeStyles = (p: Palette) =>
     detailRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
+      alignItems: 'center',
       paddingVertical: Spacing.md,
     },
+    // Account picker as a field row: label left, dropdown right.
+    fieldRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: Spacing.md,
+    },
+    fieldRowLabel: { color: p.dim, fontSize: Typography.body.fontSize },
+    // Transfer: source and destination account pickers side by side.
+    fromToRow: { flexDirection: 'row', gap: Spacing.md },
+    fromToCol: { flex: 1, gap: Spacing.xs },
     detailLabel: { color: p.dim, fontSize: Typography.body.fontSize },
     detailValue: { color: p.ink, fontSize: Typography.body.fontSize },
     sectionTitle: {

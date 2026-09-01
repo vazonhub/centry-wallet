@@ -16,25 +16,26 @@ struct CentryShortcuts: AppShortcutsProvider {
     AppShortcut(
       intent: AddExpenseIntent(),
       phrases: [
-        "Добавить трату в \(.applicationName)",
-        "Записать расход в \(.applicationName)",
-        "\(.applicationName) трата",
         "Add expense to \(.applicationName)",
         "Log an expense in \(.applicationName)",
         "\(.applicationName) expense",
+        "Добавить трату в \(.applicationName)",
+        "Записать расход в \(.applicationName)",
+        "\(.applicationName) трата",
       ],
-      shortTitle: "Добавить трату",
+      shortTitle: "Add expense",
       systemImageName: "minus.circle"
     )
     AppShortcut(
       intent: AddIncomeIntent(),
       phrases: [
-        "Добавить доход в \(.applicationName)",
-        "Записать доход в \(.applicationName)",
         "Add income to \(.applicationName)",
         "Log income in \(.applicationName)",
+        "\(.applicationName) income",
+        "Добавить доход в \(.applicationName)",
+        "Записать доход в \(.applicationName)",
       ],
-      shortTitle: "Добавить доход",
+      shortTitle: "Add income",
       systemImageName: "plus.circle"
     )
   }

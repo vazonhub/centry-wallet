@@ -41,13 +41,16 @@ enum CentryDeepLink {
 
 @available(iOS 18.0, *)
 struct AddExpenseIntent: AppIntent {
-  static var title: LocalizedStringResource = "Добавить трату"
-  static var description = IntentDescription("Быстро записать расход в Centry.")
+  static var title: LocalizedStringResource = "Add expense"
+  static var description = IntentDescription("Quickly log an expense in Centry.")
+  // Foreground the app when Siri runs the intent, so the OpenURLIntent below has
+  // a place to open into (without this the deep-link open can fail).
+  static var openAppWhenRun = true
 
-  @Parameter(title: "Сумма")
+  @Parameter(title: "Amount")
   var amount: Double?
 
-  @Parameter(title: "Заметка")
+  @Parameter(title: "Note")
   var note: String?
 
   @MainActor
@@ -58,13 +61,14 @@ struct AddExpenseIntent: AppIntent {
 
 @available(iOS 18.0, *)
 struct AddIncomeIntent: AppIntent {
-  static var title: LocalizedStringResource = "Добавить доход"
-  static var description = IntentDescription("Быстро записать доход в Centry.")
+  static var title: LocalizedStringResource = "Add income"
+  static var description = IntentDescription("Quickly log income in Centry.")
+  static var openAppWhenRun = true
 
-  @Parameter(title: "Сумма")
+  @Parameter(title: "Amount")
   var amount: Double?
 
-  @Parameter(title: "Заметка")
+  @Parameter(title: "Note")
   var note: String?
 
   @MainActor

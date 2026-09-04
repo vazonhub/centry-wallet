@@ -13,7 +13,7 @@ module.exports = {
   name: 'widget',
   displayName: 'Centry',
   deploymentTarget: '15.1',
-  frameworks: ['SwiftUI', 'WidgetKit'],
+  frameworks: ['SwiftUI', 'WidgetKit', 'AppIntents'],
   entitlements: {
     'com.apple.security.application-groups': ['group.by.vazon.centry'],
   },

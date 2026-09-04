@@ -14,11 +14,13 @@ import '@i18n';
 import { useAppBootstrap } from '@hooks/useAppBootstrap';
 import { useNotificationResponse } from '@hooks/useNotificationResponse';
 import { useIsDark, usePalette } from '@hooks/usePalette';
+import { useQuickAddDrain } from '@hooks/useQuickAddDrain';
 import { useSiriPrefill } from '@hooks/useSiriPrefill';
 import { useWidgetDeepLink } from '@hooks/useWidgetDeepLink';
 import { AccountSheet } from '@components/AccountSheet';
 import { BudgetSheet } from '@components/BudgetSheet';
 import { CategoryEditorSheet } from '@components/CategoryEditorSheet';
+import { GoalsSheet } from '@components/GoalsSheet';
 import { TransactionDetailSheet } from '@components/TransactionDetailSheet';
 import { WalletTotalSheet } from '@components/WalletTotalSheet';
 import { InputSheet } from '@views/input/InputSheet';
@@ -44,6 +46,7 @@ export default function RootLayout() {
   const { ready } = useAppBootstrap();
   useWidgetDeepLink();
   useSiriPrefill();
+  useQuickAddDrain();
   useNotificationResponse();
   const isDark = useIsDark();
   const palette = usePalette();
@@ -68,6 +71,7 @@ export default function RootLayout() {
               <AccountSheet />
               <BudgetSheet />
               <CategoryEditorSheet />
+              <GoalsSheet />
               <TransactionDetailSheet />
               <WalletTotalSheet />
               <OnboardingScreen />

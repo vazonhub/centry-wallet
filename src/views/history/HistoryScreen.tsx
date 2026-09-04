@@ -25,6 +25,7 @@ import { openTransactionDetail } from '@components/transactionDetailRef';
 import { openWalletTotal } from '@components/walletTotalRef';
 import { EXPENSE_FALLBACK_ICON, INCOME_FALLBACK_ICON, TRANSFER_ICON } from '@constants/icons';
 import { HistoryController } from '@controllers/history.controller';
+import { useReduceMotion } from '@hooks/useAccessibility';
 import { usePalette } from '@hooks/usePalette';
 import type { Category, Transaction } from '@models';
 import { useDataStore } from '@stores/data.store';
@@ -62,6 +63,8 @@ export function HistoryScreen() {
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const insets = useSafeAreaInsets();
+  // Reduce Motion: collapse instantly instead of gliding.
+  const collapseDuration = useReduceMotion() ? 0 : 240;
 
   // Short month labels for the month/year picker grid.
   const monthsShort = useMemo(
@@ -409,7 +412,7 @@ export function HistoryScreen() {
       </View>
 
       {outcome > 0 && catSegments.length > 0 && (
-        <Animated.View layout={LinearTransition.duration(240)} style={styles.topBlock}>
+        <Animated.View layout={LinearTransition.duration(collapseDuration)} style={styles.topBlock}>
           {collapsed ? (
             <Animated.View
               key="seg"
@@ -657,7 +660,7 @@ export function HistoryScreen() {
             collapses/expands, the list glides to its new position in sync with
             that block's LinearTransition instead of snapping (which read as the
             feed "jumping"). Same duration → the two move as one. */}
-        <Animated.View style={styles.listWrap} layout={LinearTransition.duration(240)}>
+        <Animated.View style={styles.listWrap} layout={LinearTransition.duration(collapseDuration)}>
           <FlashList
             data={rows}
             onScroll={onScroll}

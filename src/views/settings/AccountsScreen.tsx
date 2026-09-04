@@ -12,7 +12,7 @@ import { ScreenHeader } from '@components/ScreenHeader';
 import { TransactionsController } from '@controllers/transactions.controller';
 import { usePalette } from '@hooks/usePalette';
 import type { Account } from '@models';
-import { useDataStore } from '@stores/data.store';
+import { selectSpendAccounts, useDataStore } from '@stores/data.store';
 import type { Palette } from '@theme';
 import { Radius, Spacing, TAB_BAR_HEIGHT, Typography } from '@theme';
 import { displayAccountName } from '@utils/displayName';
@@ -21,7 +21,7 @@ export function AccountsScreen() {
   const { t } = useTranslation();
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
-  const accounts = useDataStore((s) => s.accounts);
+  const accounts = useDataStore(selectSpendAccounts);
   const balances = useDataStore((s) => s.balances);
   const insets = useSafeAreaInsets();
   // Freeze page scroll while an account is being dragged.

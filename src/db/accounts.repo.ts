@@ -12,6 +12,9 @@ interface AccountRow {
   opening_minor: number;
   sort_order: number;
   is_default: number;
+  target_minor: number | null;
+  color: string | null;
+  closed_at: number | null;
   created_at: number;
   updated_at: number;
   archived_at: number | null;
@@ -27,6 +30,9 @@ function mapRow(r: AccountRow): Account {
     openingMinor: r.opening_minor,
     sortOrder: r.sort_order,
     isDefault: r.is_default === 1,
+    targetMinor: r.target_minor,
+    color: r.color,
+    closedAt: r.closed_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     archivedAt: r.archived_at,
@@ -37,8 +43,9 @@ export async function createAccount(a: Account): Promise<void> {
   const db = getDb();
   await db.runAsync(
     `INSERT INTO accounts
-       (id, name, currency, kind, icon, opening_minor, sort_order, is_default, created_at, updated_at, archived_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
+       (id, name, currency, kind, icon, opening_minor, sort_order, is_default,
+        target_minor, color, closed_at, created_at, updated_at, archived_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`,
     [
       a.id,
       a.name,
@@ -48,10 +55,53 @@ export async function createAccount(a: Account): Promise<void> {
       a.openingMinor,
       a.sortOrder,
       a.isDefault ? 1 : 0,
+      a.targetMinor,
+      a.color,
+      a.closedAt,
       a.createdAt,
       a.updatedAt,
       a.archivedAt,
     ],
+  );
+}
+
+/**
+ * Goal accounts (kind 'goal'), ordered like other accounts. Open goals only by
+ * default; pass `includeClosed` to also return achieved/purchased ones.
+ */
+export async function listGoals(includeClosed = false): Promise<Account[]> {
+  const db = getDb();
+  const rows = await db.getAllAsync<AccountRow>(
+    `SELECT * FROM accounts
+     WHERE kind = 'goal'${includeClosed ? '' : ' AND closed_at IS NULL AND archived_at IS NULL'}
+     ORDER BY sort_order ASC, created_at ASC;`,
+  );
+  return rows.map(mapRow);
+}
+
+/** Edits a goal's display fields and target (currency is fixed, like accounts). */
+export async function updateGoal(
+  id: Id,
+  fields: { name: string; targetMinor: number; color: string | null; icon: string | null },
+  updatedAt: number,
+): Promise<void> {
+  const db = getDb();
+  await db.runAsync(
+    `UPDATE accounts SET name = ?, target_minor = ?, color = ?, icon = ?, updated_at = ? WHERE id = ?;`,
+    [fields.name, fields.targetMinor, fields.color, fields.icon, updatedAt, id],
+  );
+}
+
+/**
+ * Closes a goal (achieved/purchased): its saved money "burns" — the goal is
+ * archived so its balance leaves the wallet total, and `closed_at` marks it as
+ * completed (distinct from a plainly archived account).
+ */
+export async function closeGoal(id: Id, closedAt: number): Promise<void> {
+  const db = getDb();
+  await db.runAsync(
+    `UPDATE accounts SET closed_at = ?, archived_at = ?, updated_at = ? WHERE id = ?;`,
+    [closedAt, closedAt, closedAt, id],
   );
 }
 

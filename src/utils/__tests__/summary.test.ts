@@ -1,7 +1,25 @@
-import type { Transaction } from '@models';
+import type { Account, Transaction } from '@models';
 
 import { type BudgetPlan } from '../budget';
-import { computeAllowance, firstActivityLocalDay } from '../summary';
+import { computeAllowance, firstActivityLocalDay, resolveSpendAccountIds } from '../summary';
+
+const acc = (over: Partial<Account> = {}): Account => ({
+  id: 'a1',
+  name: 'Main',
+  currency: 'BYN',
+  kind: 'card',
+  icon: 'card',
+  openingMinor: 0,
+  sortOrder: 0,
+  isDefault: true,
+  targetMinor: null,
+  color: null,
+  closedAt: null,
+  createdAt: 0,
+  updatedAt: 0,
+  archivedAt: null,
+  ...over,
+});
 
 const plan = (over: Partial<BudgetPlan> = {}): BudgetPlan => ({
   period: 'month',
@@ -194,5 +212,68 @@ describe('computeAllowance — "можно сегодня" (shared by home + wid
     });
 
     expect(a.todaySpentMinor).toBe(0); // transfers/income are not spending
+  });
+
+  it('reports remainingToday = perDay − todaySpent, and lets it go negative', () => {
+    const seed = tx({ id: 'seed', localDay: '2026-08-01', amountMinor: 0, kind: 'income' });
+    const under = computeAllowance({
+      plan: plan({ amountMinor: 310_00, currency: 'BYN' }), // perDay 10.00
+      recent: [seed, tx({ id: 't1', localDay: '2026-08-20', amountMinor: -3_00 })],
+      base: 'BYN',
+      rates: {},
+      todayLocalDay: '2026-08-20',
+      now,
+    });
+    expect(under.perDayMinor).toBe(10_00);
+    expect(under.remainingTodayMinor).toBe(7_00); // 10.00 − 3.00
+
+    const over = computeAllowance({
+      plan: plan({ amountMinor: 310_00, currency: 'BYN' }),
+      recent: [seed, tx({ id: 't1', localDay: '2026-08-20', amountMinor: -14_00 })],
+      base: 'BYN',
+      rates: {},
+      todayLocalDay: '2026-08-20',
+      now,
+    });
+    expect(over.remainingTodayMinor).toBe(-4_00); // 10.00 − 14.00 (overspent)
+  });
+
+  it('counts only target spend accounts toward today/period spend', () => {
+    const recent = [
+      tx({ id: 'seed', localDay: '2026-08-01', amountMinor: 0, kind: 'income', accountId: 'card' }),
+      tx({ id: 'c', localDay: '2026-08-20', amountMinor: -3_00, accountId: 'card' }),
+      tx({ id: 's', localDay: '2026-08-20', amountMinor: -9_00, accountId: 'savings' }),
+    ];
+    const base = {
+      plan: plan({ amountMinor: 310_00, currency: 'BYN' }),
+      recent,
+      base: 'BYN',
+      rates: {},
+      todayLocalDay: '2026-08-20',
+      now,
+    };
+    // All accounts: both expenses count.
+    expect(computeAllowance(base).todaySpentMinor).toBe(12_00);
+    // Only the card counts: the savings expense is ignored.
+    const carded = computeAllowance({ ...base, spendAccountIds: new Set(['card']) });
+    expect(carded.todaySpentMinor).toBe(3_00);
+    expect(carded.remainingTodayMinor).toBe(7_00); // 10.00 − 3.00
+  });
+});
+
+describe('resolveSpendAccountIds', () => {
+  it('null selects every non-goal account', () => {
+    const accounts = [acc({ id: 'card' }), acc({ id: 'cash', kind: 'cash' })];
+    expect([...resolveSpendAccountIds(null, accounts)].sort()).toEqual(['card', 'cash']);
+  });
+
+  it('a list keeps only the chosen accounts and drops unknown ids', () => {
+    const accounts = [acc({ id: 'card' }), acc({ id: 'cash', kind: 'cash' })];
+    expect([...resolveSpendAccountIds(['card', 'ghost'], accounts)]).toEqual(['card']);
+  });
+
+  it('never includes goal accounts, even under null', () => {
+    const accounts = [acc({ id: 'card' }), acc({ id: 'goal1', kind: 'goal' as Account['kind'] })];
+    expect([...resolveSpendAccountIds(null, accounts)]).toEqual(['card']);
   });
 });

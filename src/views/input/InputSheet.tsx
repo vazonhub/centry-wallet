@@ -18,7 +18,7 @@ import { consumeInputPrefill, inputSheetRef } from '@components/inputSheetRef';
 import { ACCOUNT_KIND_ICONS, type IoniconName } from '@constants/icons';
 import { TransactionsController } from '@controllers/transactions.controller';
 import { usePalette } from '@hooks/usePalette';
-import type { Account, Category, TransactionKind } from '@models';
+import type { Category, SpendAccountKind, TransactionKind } from '@models';
 import { useDataStore } from '@stores/data.store';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
@@ -41,7 +41,7 @@ import {
 } from '@utils/money';
 
 const E6_ONE = 1_000_000;
-const ACCOUNT_KINDS: { kind: Account['kind']; icon: IoniconName }[] = [
+const ACCOUNT_KINDS: { kind: SpendAccountKind; icon: IoniconName }[] = [
   { kind: 'cash', icon: ACCOUNT_KIND_ICONS.cash },
   { kind: 'card', icon: ACCOUNT_KIND_ICONS.card },
   { kind: 'wallet', icon: ACCOUNT_KIND_ICONS.wallet },
@@ -85,7 +85,7 @@ export function InputSheet() {
   const [createTarget, setCreateTarget] = useState<CreateTarget | null>(null);
   const [newName, setNewName] = useState('');
   const [newCurrency, setNewCurrency] = useState(base);
-  const [newKind, setNewKind] = useState<Account['kind']>('cash');
+  const [newKind, setNewKind] = useState<SpendAccountKind>('cash');
 
   const account = useMemo(() => accounts.find((a) => a.id === accountId), [accounts, accountId]);
   const fromAccount = useMemo(

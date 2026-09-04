@@ -1,5 +1,6 @@
 import { AccountsRepo, CategoriesRepo, TransactionsRepo, wipeAllData } from '@db';
 import { ensureRates, getCachedRates } from '@services/rates';
+import { sendWatchSnapshot } from '@services/watch';
 import { refreshWidgetSnapshot } from '@services/widget';
 import { useDataStore } from '@stores/data.store';
 import { useSettingsStore } from '@stores/settings.store';
@@ -38,6 +39,9 @@ async function loadAll(): Promise<void> {
   // App-Group widget snapshot in lock-step with the store after each mutation
   // (and on bootstrap) — docs/DATA_MODEL.md#снимок-для-виджета. Best-effort.
   refreshWidgetSnapshot();
+  // Same idea for the Apple Watch, but over WatchConnectivity (a watch is a
+  // separate device, so App Groups don't reach it). Best-effort, no-op off-iOS.
+  sendWatchSnapshot();
 }
 
 /**

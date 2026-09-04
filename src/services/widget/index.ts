@@ -8,7 +8,7 @@ import { WIDGET_SNAPSHOT_KEY, widgetStorage } from '@storage/mmkv';
 import { todayLocalDay } from '@utils/date';
 import { currencyName, displayAccountName, displayCategoryName } from '@utils/displayName';
 import { formatMoney } from '@utils/money';
-import { totalBalanceBaseMinor } from '@utils/summary';
+import { resolveSpendAccountIds, totalBalanceBaseMinor } from '@utils/summary';
 
 import { buildWidgetSnapshot } from './snapshot';
 
@@ -30,6 +30,7 @@ export function refreshWidgetSnapshot(): void {
   try {
     const data = useDataStore.getState();
     const settings = useSettingsStore.getState();
+    const spendAccountIds = resolveSpendAccountIds(settings.spendAccountIds, data.accounts);
 
     const snapshot = buildWidgetSnapshot({
       accounts: data.accounts,
@@ -39,6 +40,7 @@ export function refreshWidgetSnapshot(): void {
       base: settings.baseCurrency,
       rates: data.rates,
       plan: settings.budgetPlan,
+      spendAccountIds,
       todayLocalDay: todayLocalDay(),
       now: new Date(),
       periodLabel:
@@ -68,7 +70,8 @@ export function refreshWidgetSnapshot(): void {
     const totalMinor = totalBalanceBaseMinor(data.accounts, data.balances, data.rates, base);
     writeSiriStats({
       total: formatMoney(totalMinor, base),
-      canSpend: formatMoney(snapshot.perDayMinor, base),
+      // "Сколько можно потратить сегодня" = the real remaining amount.
+      canSpend: formatMoney(snapshot.remainingTodayMinor, base),
       spentToday: formatMoney(snapshot.todaySpentMinor, base),
     });
     // Accounts the Siri "Add" intents offer as the target-account parameter.

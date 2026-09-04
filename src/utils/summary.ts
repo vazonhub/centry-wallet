@@ -11,15 +11,23 @@ const E6_ONE = 1_000_000;
  * base ×1e6 (the base currency itself is treated as 1e6).
  */
 
-/** Sum of all account balances converted to the base currency (minor units). */
+/**
+ * Sum of account balances converted to the base currency (minor units). When
+ * `accountIds` is given, only those accounts are summed — used by the "денег
+ * может не хватить" warning, which counts only the accounts the user tracks for
+ * daily spending (the "целевые счета трат" setting). Passing nothing sums every
+ * account (the wallet total).
+ */
 export function totalBalanceBaseMinor(
   accounts: Account[],
   balances: Record<string, number>,
   rates: Record<string, number>,
   base: string,
+  accountIds?: ReadonlySet<string>,
 ): number {
   let total = 0;
   for (const a of accounts) {
+    if (accountIds && !accountIds.has(a.id)) continue;
     const bal = balances[a.id] ?? 0;
     const rate = a.currency === base ? E6_ONE : (rates[a.currency] ?? E6_ONE);
     total += convertToBase(bal, rate);
@@ -28,15 +36,44 @@ export function totalBalanceBaseMinor(
 }
 
 /**
- * Amount spent today in the base currency (minor units), using each
- * transaction's frozen rate (rule 2). Expenses only (negative amounts).
+ * Resolves the "целевые счета трат" setting into the concrete set of account ids
+ * whose expenses count toward "можно сегодня" and the monthly warning. `null`
+ * means "all accounts" (the default, and auto-includes accounts added later).
+ * Goal accounts (kind 'goal') are always excluded — money moved onto a goal is a
+ * transfer and closing a goal must never register as a daily expense. Ids in the
+ * saved list that no longer exist are dropped.
  */
-export function todaySpentBaseMinor(recent: Transaction[], todayLocalDay: string): number {
+export function resolveSpendAccountIds(
+  setting: string[] | null,
+  accounts: Account[],
+): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const a of accounts) {
+    // Goal accounts (added with the goals feature) never count as spend accounts.
+    // Checked as a string so this stays valid before 'goal' joins the kind union.
+    if ((a.kind as string) === 'goal') continue;
+    if (setting === null || setting.includes(a.id)) ids.add(a.id);
+  }
+  return ids;
+}
+
+/**
+ * Amount spent today in the base currency (minor units), using each
+ * transaction's frozen rate (rule 2). Expenses only (negative amounts). When
+ * `spendAccountIds` is given, only expenses on those accounts count (the
+ * "целевые счета трат" setting) — spends on non-target accounts are ignored.
+ */
+export function todaySpentBaseMinor(
+  recent: Transaction[],
+  todayLocalDay: string,
+  spendAccountIds?: ReadonlySet<string>,
+): number {
   let spent = 0;
   for (const t of recent) {
     if (t.kind === 'transfer') continue; // internal move, not spending (matches carry-over)
     if (t.localDay !== todayLocalDay) continue;
     if (t.amountMinor >= 0) continue;
+    if (spendAccountIds && !spendAccountIds.has(t.accountId)) continue;
     spent += convertToBase(-t.amountMinor, t.rateToBaseE6);
   }
   return spent;
@@ -47,12 +84,17 @@ export function todaySpentBaseMinor(recent: Transaction[], todayLocalDay: string
  * period start day — 'YYYY-MM-DD' strings compare lexicographically. Transfers
  * are excluded (they are not spending). Feeds the carry-over plate (B10).
  */
-export function periodSpentBaseMinor(recent: Transaction[], periodStartLocalDay: string): number {
+export function periodSpentBaseMinor(
+  recent: Transaction[],
+  periodStartLocalDay: string,
+  spendAccountIds?: ReadonlySet<string>,
+): number {
   let spent = 0;
   for (const t of recent) {
     if (t.kind === 'transfer') continue;
     if (t.amountMinor >= 0) continue;
     if (t.localDay < periodStartLocalDay) continue;
+    if (spendAccountIds && !spendAccountIds.has(t.accountId)) continue;
     spent += convertToBase(-t.amountMinor, t.rateToBaseE6);
   }
   return spent;
@@ -90,12 +132,23 @@ export interface AllowanceInput {
   todayLocalDay: string;
   /** Wall-clock instant; injectable so the math stays unit-testable. */
   now: Date;
+  /**
+   * Accounts whose expenses count toward the allowance (the "целевые счета трат"
+   * setting, resolved via `resolveSpendAccountIds`). Omit to count every account.
+   */
+  spendAccountIds?: ReadonlySet<string>;
 }
 
 /** Everything the "можно сегодня" hero (and the widget snapshot) needs. */
 export interface Allowance {
   /** Daily budget = planned spend ÷ days in the period. */
   perDayMinor: number;
+  /**
+   * What is actually still spendable today = `perDayMinor − todaySpentMinor`.
+   * Goes negative once today's spend passes the daily budget (the number the
+   * "можно сегодня" hero shows; `perDayMinor` is shown beside it as the base).
+   */
+  remainingTodayMinor: number;
   /** Base-minor spent today (expenses only). */
   todaySpentMinor: number;
   /** Period surplus (+) / deficit (−) in base minor units (B10). */
@@ -155,8 +208,8 @@ export function computeAllowance(i: AllowanceInput): Allowance {
 
   // Flat daily rate over the whole calendar period — never inflated by a late start.
   const perDayMinor = perDay(expectedBaseMinor, bounds.daysInPeriod);
-  const todaySpentMinor = todaySpentBaseMinor(i.recent, i.todayLocalDay);
-  const periodSpentMinor = periodSpentBaseMinor(i.recent, eff.startLocalDay);
+  const todaySpentMinor = todaySpentBaseMinor(i.recent, i.todayLocalDay, i.spendAccountIds);
+  const periodSpentMinor = periodSpentBaseMinor(i.recent, eff.startLocalDay, i.spendAccountIds);
   // Days elapsed before the anchor forfeit their share of the plan; only the
   // budget from the anchor onward is spendable.
   const daysBeforeAnchor = bounds.daysInPeriod - eff.daysInPeriod;
@@ -171,6 +224,7 @@ export function computeAllowance(i: AllowanceInput): Allowance {
   );
   return {
     perDayMinor,
+    remainingTodayMinor: perDayMinor - todaySpentMinor,
     todaySpentMinor,
     carryMinor,
     daysLeft: bounds.daysLeft,

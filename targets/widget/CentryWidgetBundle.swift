@@ -7,13 +7,15 @@ import WidgetKit
 
 @main
 struct CentryWidgetBundle: WidgetBundle {
+  // Both widgets are listed unconditionally. Do NOT wrap either in `if #available`
+  // — inside a @WidgetBundleBuilder that emits `buildLimitedAvailability`, which
+  // traps at launch (the extension then never appears in the widget gallery). The
+  // whole extension floors at iOS 16 instead (see expo-target.config.js).
   var body: some Widget {
     CentryWidget()
-    // Interactive quick-add widget (buttons need iOS 16 SDK; taps are interactive
-    // on iOS 17+, and deep-link to the input sheet on iOS 16).
-    if #available(iOS 16.0, *) {
-      QuickAddWidget()
-    }
+    // Interactive quick-add widget: taps are interactive on iOS 17+, and
+    // deep-link to the input sheet on iOS 16.
+    QuickAddWidget()
   }
 }
 
@@ -32,14 +34,15 @@ struct CentryWidget: Widget {
     .contentMarginsDisabled()
   }
 
-  /// Home-screen families always; lock-screen (accessory) families on iOS 16+.
-  static var families: [WidgetFamily] {
-    var f: [WidgetFamily] = [.systemSmall, .systemMedium]
-    if #available(iOS 16.0, *) {
-      f.append(contentsOf: [.accessoryRectangular, .accessoryCircular, .accessoryInline])
-    }
-    return f
-  }
+  /// Home-screen families + lock-screen (accessory) families (extension floors
+  /// at iOS 16, so accessory families are always available).
+  static let families: [WidgetFamily] = [
+    .systemSmall,
+    .systemMedium,
+    .accessoryRectangular,
+    .accessoryCircular,
+    .accessoryInline,
+  ]
 }
 
 struct CentryWidgetEntryView: View {
@@ -53,18 +56,12 @@ struct CentryWidgetEntryView: View {
     case .systemSmall:
       SmallWidgetView(snapshot: entry.snapshot)
     default:
-      if #available(iOS 16.0, *) {
-        AccessoryEntryView(family: family, snapshot: entry.snapshot)
-      } else {
-        SmallWidgetView(snapshot: entry.snapshot)
-      }
+      AccessoryEntryView(family: family, snapshot: entry.snapshot)
     }
   }
 }
 
-/// Routes the accessory (lock-screen) families. Split out so the iOS 16 enum
-/// cases are only referenced inside an availability-guarded view.
-@available(iOS 16.0, *)
+/// Routes the accessory (lock-screen) families.
 private struct AccessoryEntryView: View {
   let family: WidgetFamily
   let snapshot: CentrySnapshot

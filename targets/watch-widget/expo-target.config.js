@@ -10,7 +10,15 @@
 /** @type {import('@bacons/apple-targets').Config} */
 module.exports = {
   type: 'watch-widget',
-  name: 'watch-widget',
+  // MUST stay hyphen-free. apple-targets sets the PBXNativeTarget name to `name`
+  // as-is, but reports `targetName` to EAS as the *sanitized* productName
+  // (`sanitizeNameForNonDisplayUse` strips non-word chars → a hyphen is dropped).
+  // EAS's "Configure Xcode project" step then looks the target up BY NAME, so a
+  // hyphen here makes name (`watch-widget`) ≠ EAS target (`watchwidget`) and the
+  // build fails with "Could not find target 'watchwidget' in project.pbxproj".
+  // Keep name == productName. The folder can stay `watch-widget`; sources are
+  // globbed from this config's directory, not from `name`.
+  name: 'watchwidget',
   displayName: 'Centry',
   // The complication is an appex embedded INSIDE the watch app, so iOS requires
   // its bundle id to be prefixed by the watch app's id (`by.vazon.centry.watch`).

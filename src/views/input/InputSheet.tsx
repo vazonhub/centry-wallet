@@ -96,6 +96,11 @@ export function InputSheet() {
     () => accounts.find((a) => a.id === toAccountId),
     [accounts, toAccountId],
   );
+  // Real accounts vs goals. Goals can ONLY receive money — they never appear in
+  // the normal account rows (expense/income/transfer-from), only in a dedicated
+  // "to goal" strip under the transfer destination.
+  const spendAccounts = useMemo(() => accounts.filter((a) => a.kind !== 'goal'), [accounts]);
+  const goals = useMemo(() => accounts.filter((a) => a.kind === 'goal'), [accounts]);
   const kindCategories = useMemo<Category[]>(
     () => categories.filter((c) => c.kind === (kind === 'income' ? 'income' : 'expense')),
     [categories, kind],
@@ -140,6 +145,14 @@ export function InputSheet() {
         ? accounts.find((a) => a.id === prefill.accountId)
         : undefined;
       if (chosen) setAccountId(chosen.id);
+      // Transfer legs (goal top-up): preselect from/to so the sheet opens ready
+      // to move money into the goal, the user just enters the amount.
+      if (prefill.fromAccountId && accounts.some((a) => a.id === prefill.fromAccountId)) {
+        setFromAccountId(prefill.fromAccountId);
+      }
+      if (prefill.toAccountId && accounts.some((a) => a.id === prefill.toAccountId)) {
+        setToAccountId(prefill.toAccountId);
+      }
       if (prefill.amount) {
         const forAmount =
           chosen ??
@@ -301,7 +314,7 @@ export function InputSheet() {
       style={styles.chipsScroll}
       contentContainerStyle={styles.chipsScrollContent}
     >
-      {accounts.map((a) => {
+      {spendAccounts.map((a) => {
         const active = a.id === selectedId;
         return (
           <Pressable
@@ -327,6 +340,37 @@ export function InputSheet() {
       <Pressable onPress={() => beginCreate(target)} style={styles.chip}>
         <Text style={styles.chipText}>{t('input.addAccount')}</Text>
       </Pressable>
+    </ScrollView>
+  );
+
+  // A separate strip of GOAL chips, shown only under the transfer destination —
+  // the one place money can land on a goal (goals never appear as normal
+  // accounts). Each chip shows the goal's colour dot instead of an icon.
+  const renderGoalChips = (selectedId: string | null, onSelect: (id: string) => void) => (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      style={styles.chipsScroll}
+      contentContainerStyle={styles.chipsScrollContent}
+    >
+      {goals.map((g) => {
+        const active = g.id === selectedId;
+        return (
+          <Pressable
+            key={g.id}
+            onPress={() => {
+              onSelect(g.id);
+              hapticLight();
+            }}
+            style={[styles.chip, styles.chipRow, active && styles.chipActive]}
+          >
+            <View style={[styles.goalDot, { backgroundColor: g.color ?? palette.accent }]} />
+            <Text style={[styles.chipText, active && styles.chipTextActive]}>
+              {displayAccountName(g)} · {g.currency}
+            </Text>
+          </Pressable>
+        );
+      })}
     </ScrollView>
   );
 
@@ -445,6 +489,15 @@ export function InputSheet() {
                     setTransferOverride(null);
                   },
                   'to',
+                )}
+                {goals.length > 0 && (
+                  <>
+                    <Text style={styles.label}>{t('input.toGoal')}</Text>
+                    {renderGoalChips(toAccountId, (id) => {
+                      setToAccountId(id);
+                      setTransferOverride(null);
+                    })}
+                  </>
                 )}
                 {transfer && !transfer.sameCurrency && fromAccount && toAccount && (
                   <>
@@ -654,6 +707,7 @@ const makeStyles = (p: Palette) =>
     },
     chipActive: { backgroundColor: p.btnBg, borderColor: p.btnBg },
     chipRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    goalDot: { width: 12, height: 12, borderRadius: 6 },
     chipText: { color: p.ink, fontSize: Typography.footnote.fontSize },
     chipTextActive: { color: p.btnInk },
     cat: {

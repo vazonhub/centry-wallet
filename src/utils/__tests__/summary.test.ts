@@ -214,7 +214,9 @@ describe('computeAllowance — "можно сегодня" (shared by home + wid
     expect(a.todaySpentMinor).toBe(0); // transfers/income are not spending
   });
 
-  it('reports remainingToday = perDay − todaySpent, and lets it go negative', () => {
+  it('rolls the reserve into remainingToday, and goes negative once it is gone', () => {
+    // Seed on 08-01 → 19 fully-passed days before today, all underspent, so the
+    // reserve (запас) is 19 × 10.00 = 190.00 and lifts today's number.
     const seed = tx({ id: 'seed', localDay: '2026-08-01', amountMinor: 0, kind: 'income' });
     const under = computeAllowance({
       plan: plan({ amountMinor: 310_00, currency: 'BYN' }), // perDay 10.00
@@ -225,17 +227,21 @@ describe('computeAllowance — "можно сегодня" (shared by home + wid
       now,
     });
     expect(under.perDayMinor).toBe(10_00);
-    expect(under.remainingTodayMinor).toBe(7_00); // 10.00 − 3.00
+    expect(under.carryMinor).toBe(190_00);
+    expect(under.remainingTodayMinor).toBe(197_00); // 10.00 + 190.00 reserve − 3.00
 
+    // First activity is today → no prior days, so the reserve is 0 and
+    // overspending today drives the number negative.
     const over = computeAllowance({
       plan: plan({ amountMinor: 310_00, currency: 'BYN' }),
-      recent: [seed, tx({ id: 't1', localDay: '2026-08-20', amountMinor: -14_00 })],
+      recent: [tx({ id: 't1', localDay: '2026-08-20', amountMinor: -14_00 })],
       base: 'BYN',
       rates: {},
       todayLocalDay: '2026-08-20',
       now,
     });
-    expect(over.remainingTodayMinor).toBe(-4_00); // 10.00 − 14.00 (overspent)
+    expect(over.carryMinor).toBe(0);
+    expect(over.remainingTodayMinor).toBe(-4_00); // 10.00 + 0 − 14.00 (overspent)
   });
 
   it('counts only target spend accounts toward today/period spend', () => {
@@ -257,7 +263,8 @@ describe('computeAllowance — "можно сегодня" (shared by home + wid
     // Only the card counts: the savings expense is ignored.
     const carded = computeAllowance({ ...base, spendAccountIds: new Set(['card']) });
     expect(carded.todaySpentMinor).toBe(3_00);
-    expect(carded.remainingTodayMinor).toBe(7_00); // 10.00 − 3.00
+    // 10.00 perDay + 190.00 reserve (19 underspent days) − 3.00 spent today.
+    expect(carded.remainingTodayMinor).toBe(197_00);
   });
 });
 

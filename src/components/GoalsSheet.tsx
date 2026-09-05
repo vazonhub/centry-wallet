@@ -8,11 +8,12 @@ import {
   BottomSheetTextInput,
   type BottomSheetBackdropProps,
 } from '@gorhom/bottom-sheet';
+import { useShallow } from 'zustand/react/shallow';
 
-import { AccountDropdown } from '@components/AccountDropdown';
 import { AppIcon } from '@components/AppIcon';
 import { CurrencyDropdown } from '@components/CurrencyDropdown';
 import { goalsSheetRef, type GoalsSheetHandle } from '@components/goalsSheetRef';
+import { openInputSheet } from '@components/inputSheetRef';
 import { Money } from '@components/Money';
 import { ProgressRing } from '@components/ProgressRing';
 import { CATEGORY_COLOR_CHOICES } from '@constants/categories';
@@ -33,7 +34,7 @@ import {
   sanitizeAmountInput,
 } from '@utils/money';
 
-type GoalsView = 'list' | 'form' | 'topup';
+type GoalsView = 'list' | 'form';
 
 /**
  * The single global savings-goals sheet (rendered once at the app root). Lists
@@ -47,24 +48,19 @@ export function GoalsSheet() {
   const styles = useMemo(() => makeStyles(palette), [palette]);
   const sheetRef = useRef<BottomSheetModal>(null);
 
-  const goals = useDataStore(selectGoals);
-  const spendAccounts = useDataStore(selectSpendAccounts);
+  const goals = useDataStore(useShallow(selectGoals));
+  const spendAccounts = useDataStore(useShallow(selectSpendAccounts));
   const balances = useDataStore((s) => s.balances);
   const base = useSettingsStore((s) => s.baseCurrency);
 
   const [view, setView] = useState<GoalsView>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [topupGoalId, setTopupGoalId] = useState<string | null>(null);
 
   // Form fields (create/edit).
   const [name, setName] = useState('');
   const [targetInput, setTargetInput] = useState('');
   const [currency, setCurrency] = useState(base);
   const [color, setColor] = useState<string>(CATEGORY_COLOR_CHOICES[0] as string);
-
-  // Top-up fields.
-  const [fromAccountId, setFromAccountId] = useState<string | null>(null);
-  const [amountInput, setAmountInput] = useState('');
 
   useImperativeHandle(
     goalsSheetRef,
@@ -76,8 +72,6 @@ export function GoalsSheet() {
     }),
     [],
   );
-
-  const topupGoal = topupGoalId ? goals.find((g) => g.id === topupGoalId) : undefined;
 
   const openCreate = () => {
     setEditingId(null);
@@ -99,12 +93,17 @@ export function GoalsSheet() {
     hapticLight();
   };
 
+  // "Add money" opens the shared transaction sheet in transfer mode, preset to
+  // move from a spend account into this goal — a single entry point for adding
+  // funds instead of a separate in-sheet top-up screen.
   const openTopup = (g: Account) => {
-    setTopupGoalId(g.id);
-    setFromAccountId(spendAccounts[0]?.id ?? null);
-    setAmountInput('');
-    setView('topup');
     hapticLight();
+    sheetRef.current?.dismiss();
+    openInputSheet({
+      kind: 'transfer',
+      fromAccountId: spendAccounts[0]?.id,
+      toAccountId: g.id,
+    });
   };
 
   const saveGoal = async () => {
@@ -125,17 +124,6 @@ export function GoalsSheet() {
         color,
       });
     }
-    hapticSuccess();
-    setView('list');
-  };
-
-  const confirmTopup = async () => {
-    if (!topupGoalId || !fromAccountId) return;
-    const from = spendAccounts.find((a) => a.id === fromAccountId);
-    if (!from) return;
-    const amountMinor = parseAmountToMinor(amountInput, from.currency) ?? 0;
-    if (amountMinor <= 0) return;
-    await TransactionsController.topUpGoal(topupGoalId, fromAccountId, amountMinor);
     hapticSuccess();
     setView('list');
   };
@@ -288,46 +276,6 @@ export function GoalsSheet() {
               </Pressable>
               <Pressable style={styles.primary} onPress={saveGoal}>
                 <Text style={styles.primaryText}>{t('common.save')}</Text>
-              </Pressable>
-            </View>
-          </>
-        )}
-
-        {view === 'topup' && topupGoal && (
-          <>
-            <Text style={styles.title}>
-              {t('goals.topUpTitle', { name: displayAccountName(topupGoal) })}
-            </Text>
-            <Text style={styles.fieldLabel}>{t('goals.topUpFrom')}</Text>
-            <AccountDropdown
-              value={fromAccountId}
-              accounts={spendAccounts}
-              onChange={setFromAccountId}
-            />
-            <Text style={styles.fieldLabel}>{t('goals.amount')}</Text>
-            <BottomSheetTextInput
-              value={amountInput}
-              onChangeText={(v) =>
-                setAmountInput(
-                  sanitizeAmountInput(
-                    v,
-                    spendAccounts.find((a) => a.id === fromAccountId)?.currency ?? base,
-                  ),
-                )
-              }
-              placeholder={amountPlaceholder(
-                spendAccounts.find((a) => a.id === fromAccountId)?.currency ?? base,
-              )}
-              placeholderTextColor={palette.dim2}
-              keyboardType="decimal-pad"
-              style={styles.input}
-            />
-            <View style={styles.formActions}>
-              <Pressable style={styles.secondary} onPress={() => setView('list')}>
-                <Text style={styles.secondaryText}>{t('common.cancel')}</Text>
-              </Pressable>
-              <Pressable style={styles.primary} onPress={confirmTopup}>
-                <Text style={styles.primaryText}>{t('goals.topUp')}</Text>
               </Pressable>
             </View>
           </>

@@ -67,6 +67,7 @@ export const ru: Translations = {
     spendAccounts: 'СЧЕТА ДЛЯ ТРАТ',
   },
   spendAccounts: {
+    title: 'СЧЕТА ДЛЯ ТРАТ',
     allAccounts: 'Все счета',
     hint: 'В «можно сегодня» и месячное предупреждение попадают только расходы по выбранным счетам. Выключите «Все счета», чтобы отметить конкретные — например, исключить накопительный счёт.',
   },
@@ -175,6 +176,7 @@ export const ru: Translations = {
     transfer: 'Перевод',
     fromAccount: 'СО СЧЁТА',
     toAccount: 'НА СЧЁТ',
+    toGoal: 'НА ЦЕЛЬ',
     rate: 'КУРС',
     total: 'ИТОГ ({{currency}})',
     rateAndTotal: 'КУРС И ИТОГ',

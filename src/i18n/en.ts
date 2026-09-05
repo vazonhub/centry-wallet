@@ -69,6 +69,7 @@ export const en = {
     spendAccounts: 'SPEND ACCOUNTS',
   },
   spendAccounts: {
+    title: 'SPEND ACCOUNTS',
     allAccounts: 'All accounts',
     hint: 'Only expenses on the chosen accounts count toward “can spend today” and the monthly warning. Turn off “All accounts” to pick specific ones — e.g. leave out a savings account.',
   },
@@ -175,6 +176,7 @@ export const en = {
     transfer: 'Transfer',
     fromAccount: 'FROM ACCOUNT',
     toAccount: 'TO ACCOUNT',
+    toGoal: 'TO GOAL',
     rate: 'RATE',
     total: 'TOTAL ({{currency}})',
     rateAndTotal: 'RATE & TOTAL',

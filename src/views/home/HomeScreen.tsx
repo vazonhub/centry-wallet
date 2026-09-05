@@ -16,7 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { AppIcon } from '@components/AppIcon';
 import { openAccountSheet } from '@components/accountSheetRef';
 import { DragSortList } from '@components/DragSortList';
-import { GoalsStrip } from '@components/GoalsStrip';
+import { GoalsBlock } from '@components/GoalsBlock';
 import { openBudgetSheet } from '@components/budgetSheetRef';
 import { openInputSheet } from '@components/inputSheetRef';
 import { openWalletTotal } from '@components/walletTotalRef';
@@ -83,7 +83,7 @@ export function HomeScreen() {
   const collapseDuration = useReduceMotion() ? 0 : COLLAPSE_DURATION;
 
   const accounts = useDataStore((s) => s.accounts);
-  // Goals are shown separately (GoalsStrip); the chips are spend accounts only.
+  // Goals are shown separately (GoalsBlock); the chips are spend accounts only.
   const spendAccounts = useMemo(() => accounts.filter((a) => a.kind !== 'goal'), [accounts]);
   const balances = useDataStore((s) => s.balances);
   const rates = useDataStore((s) => s.rates);
@@ -241,7 +241,7 @@ export function HomeScreen() {
         {/* Fixed top: info card + hero + accounts (only the feed scrolls). Layout-
             animated so the hero/chips collapse glides and the feed follows. */}
         <Animated.View style={styles.fixedTop} layout={LinearTransition.duration(collapseDuration)}>
-          {/* Top row: today (left) + wallet total (right, tappable) */}
+          {/* Top row: today (left) · goal rings (middle) · wallet total (right). */}
           <View style={styles.topRow}>
             <View style={styles.todayCard}>
               <Text
@@ -254,6 +254,7 @@ export function HomeScreen() {
                 {formatTodayCompact(dateTier)}
               </Text>
             </View>
+            <GoalsBlock />
             <Pressable
               style={styles.totalCard}
               onPress={() => {
@@ -275,9 +276,6 @@ export function HomeScreen() {
               />
             </Pressable>
           </View>
-
-          {/* Savings-goal rings — tap to open the goals sheet. */}
-          {!collapsed && <GoalsStrip />}
 
           {/* Hero block — collapses to a single line (сумма слева · потрачено
               справа) once the feed scrolls. */}
@@ -660,7 +658,8 @@ const makeStyles = (p: Palette) =>
       alignItems: 'center',
       justifyContent: 'flex-end',
       gap: Spacing.sm,
-      maxWidth: '58%',
+      // Leaves room for the goal-rings block now sitting between date and total.
+      maxWidth: '48%',
       backgroundColor: p.glassBg,
       borderColor: p.glassBorder,
       borderWidth: StyleSheet.hairlineWidth,

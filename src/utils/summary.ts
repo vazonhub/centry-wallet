@@ -144,9 +144,11 @@ export interface Allowance {
   /** Daily budget = planned spend ÷ days in the period. */
   perDayMinor: number;
   /**
-   * What is actually still spendable today = `perDayMinor − todaySpentMinor`.
-   * Goes negative once today's spend passes the daily budget (the number the
-   * "можно сегодня" hero shows; `perDayMinor` is shown beside it as the base).
+   * What is actually still spendable today = `perDayMinor + carryMinor −
+   * todaySpentMinor` — today's base allowance plus the accumulated reserve
+   * ("запас"), minus what's already been spent today. Goes negative once the
+   * reserve is exhausted too (the number the "можно сегодня" hero shows;
+   * `perDayMinor` is shown beside it as the base daily rate).
    */
   remainingTodayMinor: number;
   /** Base-minor spent today (expenses only). */
@@ -224,7 +226,11 @@ export function computeAllowance(i: AllowanceInput): Allowance {
   );
   return {
     perDayMinor,
-    remainingTodayMinor: perDayMinor - todaySpentMinor,
+    // "Можно сегодня" rolls the reserve in: today's base allowance, plus the
+    // accumulated surplus/deficit from days already passed, minus today's spend.
+    // So underspending earlier days lets you spend more today (and overspending
+    // less) — the reserve is part of the number, not a separate side note.
+    remainingTodayMinor: perDayMinor + carryMinor - todaySpentMinor,
     todaySpentMinor,
     carryMinor,
     daysLeft: bounds.daysLeft,

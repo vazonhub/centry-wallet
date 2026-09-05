@@ -21,7 +21,8 @@ private extension View {
   func widgetBackground() -> some View { modifier(WidgetBackground()) }
 }
 
-/// The hero — label + "можно сегодня" number, tinted by daily-limit usage.
+/// The hero — label + real remaining "можно сегодня" number (red when overspent),
+/// with the base daily allotment shown smaller beside it.
 private struct HeroBlock: View {
   let snapshot: CentrySnapshot
   var body: some View {
@@ -30,15 +31,19 @@ private struct HeroBlock: View {
         .font(.system(size: 10, weight: .semibold))
         .tracking(0.8)
         .foregroundStyle(Palette.dim)
-      Text(Money.format(snapshot.perDayMinor))
-        .font(.system(size: 30, weight: .semibold, design: .rounded))
-        .monospacedDigit()
-        .minimumScaleFactor(0.6)
-        .lineLimit(1)
-        .foregroundStyle(
-          Palette.heroColor(perDayMinor: snapshot.perDayMinor,
-                            todaySpentMinor: snapshot.todaySpentMinor)
-        )
+      HStack(alignment: .firstTextBaseline, spacing: 5) {
+        Text(Money.format(snapshot.remainingTodayMinor))
+          .font(.system(size: 30, weight: .semibold, design: .rounded))
+          .monospacedDigit()
+          .minimumScaleFactor(0.6)
+          .lineLimit(1)
+          .foregroundStyle(Palette.heroColor(remainingMinor: snapshot.remainingTodayMinor))
+        Text("/ \(Money.format(snapshot.perDayMinor))")
+          .font(.system(size: 12))
+          .monospacedDigit()
+          .foregroundStyle(Palette.dim)
+          .lineLimit(1)
+      }
       Text("\(snapshot.spentLabel) \(Money.format(snapshot.todaySpentMinor)) \(snapshot.currency)")
         .font(.system(size: 11))
         .foregroundStyle(Palette.dim)

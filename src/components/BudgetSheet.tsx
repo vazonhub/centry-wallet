@@ -10,6 +10,7 @@ import {
 
 import { BudgetPlanEditor } from '@components/BudgetPlanEditor';
 import { budgetSheetRef } from '@components/budgetSheetRef';
+import { SpendAccountsPicker } from '@components/SpendAccountsPicker';
 import { usePalette } from '@hooks/usePalette';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
@@ -53,6 +54,11 @@ export function BudgetSheet() {
           insideSheet
         />
         <Text style={styles.hint}>{t('budgetSheet.hint')}</Text>
+
+        {/* Целевые счета трат — same picker as onboarding/settings: which
+            accounts' spending counts toward "можно сегодня". */}
+        <Text style={styles.sectionLabel}>{t('spendAccounts.title')}</Text>
+        <SpendAccountsPicker />
       </BottomSheetScrollView>
     </BottomSheetModal>
   );
@@ -69,4 +75,11 @@ const makeStyles = (p: Palette) =>
     },
     heading: { color: p.ink, fontSize: Typography.title.fontSize, fontWeight: '600' },
     hint: { color: p.dim2, fontSize: Typography.footnote.fontSize, lineHeight: 18 },
+    sectionLabel: {
+      color: p.dim,
+      fontSize: Typography.micro.fontSize,
+      fontWeight: '700',
+      letterSpacing: 1,
+      marginTop: Spacing.md,
+    },
   });

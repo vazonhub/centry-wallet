@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useShallow } from 'zustand/react/shallow';
 
 import { AppIcon } from '@components/AppIcon';
 import { openAccountSheet } from '@components/accountSheetRef';
@@ -12,7 +13,7 @@ import { ScreenHeader } from '@components/ScreenHeader';
 import { TransactionsController } from '@controllers/transactions.controller';
 import { usePalette } from '@hooks/usePalette';
 import type { Account } from '@models';
-import { useDataStore } from '@stores/data.store';
+import { selectSpendAccounts, useDataStore } from '@stores/data.store';
 import type { Palette } from '@theme';
 import { Radius, Spacing, TAB_BAR_HEIGHT, Typography } from '@theme';
 import { displayAccountName } from '@utils/displayName';
@@ -21,7 +22,7 @@ export function AccountsScreen() {
   const { t } = useTranslation();
   const palette = usePalette();
   const styles = useMemo(() => makeStyles(palette), [palette]);
-  const accounts = useDataStore((s) => s.accounts);
+  const accounts = useDataStore(useShallow(selectSpendAccounts));
   const balances = useDataStore((s) => s.balances);
   const insets = useSafeAreaInsets();
   // Freeze page scroll while an account is being dragged.

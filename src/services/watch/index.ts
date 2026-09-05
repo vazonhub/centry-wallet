@@ -47,6 +47,7 @@ export function sendWatchSnapshot(): void {
     const spendAccounts = data.accounts.filter((a) => a.kind !== 'goal');
     const spendAccountIds = resolveSpendAccountIds(settings.spendAccountIds, data.accounts);
     const payload = buildWatchPayload({
+      language: settings.language,
       accounts: spendAccounts,
       balances: data.balances,
       recent: data.recent,

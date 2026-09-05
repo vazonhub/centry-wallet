@@ -15,7 +15,7 @@ module.exports = {
   name: 'watch',
   displayName: 'Centry',
   deploymentTarget: '9.0',
-  frameworks: ['SwiftUI', 'WatchConnectivity', 'WidgetKit'],
+  frameworks: ['SwiftUI', 'WatchConnectivity', 'WidgetKit', 'AppIntents'],
   // Watch-side App Group shared with the complication (targets/watch-widget).
   // This is on the WATCH device — unrelated to the iOS App Group.
   entitlements: {

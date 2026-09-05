@@ -34,6 +34,7 @@
     "prepare": "husky",
     "ios:eas": "eas build --platform ios --profile production --auto-submit",
     "ios:build": "npx expo prebuild --clean -p ios && npx expo run:ios --scheme Centry",
+    "ios:watch": "bash scripts/ios-watch.sh",
     "android": "expo run:android"
   },
   "dependencies": {

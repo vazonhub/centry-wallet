@@ -48,6 +48,7 @@ const tx = (over: Partial<Transaction> = {}): Transaction => ({
 });
 
 const base = {
+  language: 'en' as const,
   base: 'BYN',
   rates: {},
   todayLocalDay: '2026-08-20',
@@ -74,7 +75,8 @@ describe('buildWatchPayload', () => {
     });
 
     expect(payload.perDayMinor).toBe(10_00);
-    expect(payload.remainingTodayMinor).toBe(7_00); // 10.00 − 3.00
+    // 10.00 perDay + 190.00 reserve (19 underspent days) − 3.00 spent today.
+    expect(payload.remainingTodayMinor).toBe(197_00);
     expect(payload.todaySpentMinor).toBe(3_00);
     expect(payload.accounts).toHaveLength(2);
     expect(payload.accounts[0]).toMatchObject({ name: 'Main', balanceMinor: 5_000 });

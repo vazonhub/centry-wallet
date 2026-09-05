@@ -1,8 +1,9 @@
 import SwiftUI
 
-// Centry watchOS app. Multi-page: allowance (main) · accounts · history · stats.
-// Data arrives from the phone over WatchConnectivity (WatchModel); actions (quick
-// add, change budget) go back the same way.
+// Centry watchOS app. Info-only, vertical-paged: allowance (main) · accounts ·
+// history · stats. Data arrives from the phone over WatchConnectivity
+// (WatchModel). Input is via Siri on the watch, so there are no quick-add /
+// budget-edit controls here (QuickAddView/BudgetView are unused now).
 
 @main
 struct CentryWatchApp: App {
@@ -19,23 +20,30 @@ struct RootView: View {
   @EnvironmentObject var model: WatchModel
 
   var body: some View {
-    // Plain TabView pages (vertical crown paging on watchOS): main → accounts →
-    // history → stats.
-    TabView {
-      MainPage()
-      AccountsPage()
-      HistoryPage()
-      StatsPage()
+    // Vertical page paging (Digital Crown) on watchOS 10+; falls back to the
+    // default horizontal paging on watchOS 9. Order: main → accounts → history →
+    // stats.
+    if #available(watchOS 10.0, *) {
+      TabView { pages }.tabViewStyle(.verticalPage)
+    } else {
+      TabView { pages }
     }
+  }
+
+  @ViewBuilder private var pages: some View {
+    MainPage()
+    AccountsPage()
+    HistoryPage()
+    StatsPage()
   }
 }
 
-/// Main page — the "можно сегодня" allowance, a reserve line, a budget button,
-/// and a "+" in the toolbar for a quick expense.
+/// Main page — the "можно сегодня" allowance with today's spend, and the current
+/// budget shown at the bottom. Info-only: input happens via Siri on the watch, so
+/// there is no quick-add button and no budget editor here (budget is set on the
+/// phone).
 struct MainPage: View {
   @EnvironmentObject var model: WatchModel
-  @State private var showAdd = false
-  @State private var showBudget = false
 
   private var p: WatchPayload { model.payload }
 
@@ -63,39 +71,17 @@ struct MainPage: View {
 
           Divider().padding(.vertical, 2)
 
-          HStack {
-            Text(L.reserve).font(.system(size: 12)).foregroundStyle(WatchTheme.dim)
-            Spacer()
-            Text("\(WatchMoney.format(p.periodRemainingMinor)) \(p.currency)")
-              .font(.system(size: 13, weight: .medium))
-              .monospacedDigit()
-          }
-
-          Button {
-            showBudget = true
-          } label: {
-            Label(L.budget, systemImage: "slider.horizontal.3")
-              .frame(maxWidth: .infinity)
-          }
-          .buttonStyle(.bordered)
-          .tint(WatchTheme.accent)
-          .padding(.top, 2)
+          // Current budget for the active period (read-only; edited on the phone).
+          Text(
+            "\(L.budget): \(WatchMoney.format(p.budgetAmountMinor)) \(p.budgetCurrency) · \(p.periodLabel)"
+          )
+          .font(.system(size: 12))
+          .foregroundStyle(WatchTheme.dim)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 4)
       }
       .navigationTitle("Centry")
-      .toolbar {
-        ToolbarItem(placement: .topBarTrailing) {
-          Button {
-            showAdd = true
-          } label: {
-            Image(systemName: "plus")
-          }
-        }
-      }
-      .sheet(isPresented: $showAdd) { QuickAddView().environmentObject(model) }
-      .sheet(isPresented: $showBudget) { BudgetView().environmentObject(model) }
     }
   }
 }

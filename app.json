@@ -13,7 +13,7 @@
       "buildNumber": "6",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "CFBundleLocalizations": ["ru", "en"],
+        "CFBundleLocalizations": ["en", "ru"],
         "AppGroup": "group.by.vazon.centry"
       },
       "entitlements": {

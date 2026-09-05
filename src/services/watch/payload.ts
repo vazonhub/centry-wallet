@@ -32,6 +32,8 @@ export interface WatchDayStat {
 }
 
 export interface WatchPayload {
+  /** UI language chosen on the phone; the watch mirrors it for its own chrome. */
+  language: 'ru' | 'en';
   currency: string;
   allowanceTitle: string;
   spentLabel: string;
@@ -56,6 +58,8 @@ export interface WatchPayload {
 }
 
 export interface BuildWatchPayloadInput {
+  /** UI language chosen on the phone (drives the watch's own chrome + Siri hint). */
+  language: 'ru' | 'en';
   /** Spend accounts (non-goal); the watch lists these. */
   accounts: Account[];
   balances: Record<string, number>;
@@ -143,6 +147,7 @@ export function buildWatchPayload(input: BuildWatchPayloadInput): WatchPayload {
   }
 
   return {
+    language: input.language,
     currency: input.base,
     allowanceTitle: input.allowanceTitle,
     spentLabel: input.spentLabel,

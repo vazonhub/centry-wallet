@@ -22,6 +22,7 @@ final class WatchModel: NSObject, ObservableObject, WCSessionDelegate {
       let cached = WatchPayload.decode(from: json)
     {
       payload = cached
+      WatchLang.apply(cached.language)
     }
     if WCSession.isSupported() {
       let session = WCSession.default
@@ -36,7 +37,10 @@ final class WatchModel: NSObject, ObservableObject, WCSessionDelegate {
     else { return }
     UserDefaults(suiteName: kWatchGroup)?.set(json, forKey: kPayloadKey)
     WidgetCenter.shared.reloadAllTimelines()  // refresh the complication
-    DispatchQueue.main.async { self.payload = decoded }
+    DispatchQueue.main.async {
+      WatchLang.apply(decoded.language)  // mirror the phone's RU/EN choice
+      self.payload = decoded
+    }
   }
 
   func session(

@@ -27,6 +27,7 @@ struct WatchDayStat: Codable, Hashable, Identifiable {
 }
 
 struct WatchPayload: Codable, Hashable {
+  let language: String
   let currency: String
   let allowanceTitle: String
   let spentLabel: String
@@ -46,6 +47,7 @@ struct WatchPayload: Codable, Hashable {
   let updatedAt: Int
 
   static let placeholder = WatchPayload(
+    language: "en",
     currency: "BYN",
     allowanceTitle: "CAN SPEND TODAY",
     spentLabel: "spent",

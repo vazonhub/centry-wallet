@@ -21,6 +21,9 @@ struct WidgetRecent: Codable, Hashable {
 
 struct CentrySnapshot: Codable, Hashable {
   let perDayMinor: Int
+  /// Real amount still spendable today (perDay − today's spend; can be < 0). The
+  /// hero shows this; `perDayMinor` is shown beside it as the base allotment.
+  let remainingTodayMinor: Int
   let currency: String
   let daysLeft: Int
   let todaySpentMinor: Int
@@ -38,17 +41,19 @@ struct CentrySnapshot: Codable, Hashable {
   /// before this field existed) decode without them — default to English so the
   /// widget never shows an empty label.
   enum CodingKeys: String, CodingKey {
-    case perDayMinor, currency, daysLeft, todaySpentMinor, periodRemainingMinor, periodLabel
+    case perDayMinor, remainingTodayMinor, currency, daysLeft, todaySpentMinor
+    case periodRemainingMinor, periodLabel
     case allowanceTitle, spentLabel, forPeriodLabel, emptyLabel, accounts, recent, updatedAt
   }
 
   init(
-    perDayMinor: Int, currency: String, daysLeft: Int, todaySpentMinor: Int,
-    periodRemainingMinor: Int, periodLabel: String, allowanceTitle: String, spentLabel: String,
-    forPeriodLabel: String, emptyLabel: String, accounts: [WidgetAccount], recent: [WidgetRecent],
-    updatedAt: Int
+    perDayMinor: Int, remainingTodayMinor: Int, currency: String, daysLeft: Int,
+    todaySpentMinor: Int, periodRemainingMinor: Int, periodLabel: String, allowanceTitle: String,
+    spentLabel: String, forPeriodLabel: String, emptyLabel: String, accounts: [WidgetAccount],
+    recent: [WidgetRecent], updatedAt: Int
   ) {
     self.perDayMinor = perDayMinor
+    self.remainingTodayMinor = remainingTodayMinor
     self.currency = currency
     self.daysLeft = daysLeft
     self.todaySpentMinor = todaySpentMinor
@@ -69,6 +74,9 @@ struct CentrySnapshot: Codable, Hashable {
     currency = try c.decode(String.self, forKey: .currency)
     daysLeft = try c.decode(Int.self, forKey: .daysLeft)
     todaySpentMinor = try c.decode(Int.self, forKey: .todaySpentMinor)
+    // Older snapshots have no remaining field — derive it from perDay − spent.
+    remainingTodayMinor =
+      (try? c.decode(Int.self, forKey: .remainingTodayMinor)) ?? (perDayMinor - todaySpentMinor)
     periodRemainingMinor = try c.decode(Int.self, forKey: .periodRemainingMinor)
     periodLabel = try c.decode(String.self, forKey: .periodLabel)
     allowanceTitle = (try? c.decode(String.self, forKey: .allowanceTitle)) ?? "CAN SPEND TODAY"
@@ -83,6 +91,7 @@ struct CentrySnapshot: Codable, Hashable {
   /// Shown before the app has ever written a snapshot (fresh install / preview).
   static let placeholder = CentrySnapshot(
     perDayMinor: 0,
+    remainingTodayMinor: 0,
     currency: "BYN",
     daysLeft: 1,
     todaySpentMinor: 0,

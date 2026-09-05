@@ -26,8 +26,10 @@ export interface WidgetRecentSnapshot {
 }
 
 export interface WidgetSnapshot {
-  /** Daily budget "можно сегодня" in base minor units. */
+  /** Daily budget (the base allotment, shown beside the remaining number). */
   perDayMinor: number;
+  /** Real amount still spendable today = perDay − today's spend (can be < 0). */
+  remainingTodayMinor: number;
   /** Base currency code (widget formats with it). */
   currency: string;
   /** Whole days remaining in the period (≥ 1). */
@@ -62,6 +64,8 @@ export interface BuildSnapshotInput {
   plan: BudgetPlan;
   todayLocalDay: string;
   now: Date;
+  /** Accounts whose expenses count toward the allowance (целевые счета трат). */
+  spendAccountIds?: ReadonlySet<string>;
   /** Localized period word for the widget ("месяц" / "month"). */
   periodLabel: string;
   /** Localized static UI strings (see WidgetSnapshot). */
@@ -99,15 +103,22 @@ function rowNote(
 
 /** Builds the widget snapshot from the current data store slice. Pure. */
 export function buildWidgetSnapshot(input: BuildSnapshotInput): WidgetSnapshot {
-  const { perDayMinor, todaySpentMinor, daysLeft, periodBudgetMinor, periodSpentMinor } =
-    computeAllowance({
-      plan: input.plan,
-      recent: input.recent,
-      base: input.base,
-      rates: input.rates,
-      todayLocalDay: input.todayLocalDay,
-      now: input.now,
-    });
+  const {
+    perDayMinor,
+    remainingTodayMinor,
+    todaySpentMinor,
+    daysLeft,
+    periodBudgetMinor,
+    periodSpentMinor,
+  } = computeAllowance({
+    plan: input.plan,
+    recent: input.recent,
+    base: input.base,
+    rates: input.rates,
+    todayLocalDay: input.todayLocalDay,
+    now: input.now,
+    spendAccountIds: input.spendAccountIds,
+  });
   const periodRemainingMinor = Math.max(0, periodBudgetMinor - periodSpentMinor);
 
   const categoryById = new Map(input.categories.map((c) => [c.id, c]));
@@ -136,6 +147,7 @@ export function buildWidgetSnapshot(input: BuildSnapshotInput): WidgetSnapshot {
 
   return {
     perDayMinor,
+    remainingTodayMinor,
     currency: input.base,
     daysLeft,
     todaySpentMinor,

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { BudgetPlanEditor } from '@components/BudgetPlanEditor';
 import { ScreenHeader } from '@components/ScreenHeader';
+import { SpendAccountsPicker } from '@components/SpendAccountsPicker';
 import { commonCurrencies } from '@constants/currencies';
 import { DataController } from '@controllers/data.controller';
 import { usePalette } from '@hooks/usePalette';
@@ -59,6 +60,9 @@ export function MoneyScreen() {
         <Text style={styles.sectionTitle}>{t('money.budgetPlan')}</Text>
         <BudgetPlanEditor value={budgetPlan} onChange={setBudgetPlan} baseCurrency={baseCurrency} />
         <Text style={styles.hint}>{t('money.hint')}</Text>
+
+        <Text style={styles.sectionTitle}>{t('money.spendAccounts')}</Text>
+        <SpendAccountsPicker />
       </ScrollView>
     </View>
   );

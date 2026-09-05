@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { ScreenHeader } from '@components/ScreenHeader';
 import { DataController } from '@controllers/data.controller';
 import { ExportController } from '@controllers/export.controller';
+import { ImportController } from '@controllers/import.controller';
 import { usePalette } from '@hooks/usePalette';
 import type { Palette } from '@theme';
 import { Radius, Spacing, TAB_BAR_HEIGHT, Typography } from '@theme';
@@ -25,6 +26,7 @@ export function DataScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const [widgetRefreshed, setWidgetRefreshed] = useState(false);
   const refreshedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -62,6 +64,37 @@ export function DataScreen() {
     }
   };
 
+  const onImportCsv = async () => {
+    if (isImporting) return;
+    setIsImporting(true);
+    try {
+      const r = await ImportController.importTransactionsCsv();
+      if (r.status === 'cancelled') return;
+      if (r.status === 'empty') {
+        Alert.alert(t('data.importEmptyTitle'), t('data.importEmptyBody'), [
+          { text: t('common.ok') },
+        ]);
+        return;
+      }
+      void hapticSuccess();
+      Alert.alert(
+        t('data.importDoneTitle'),
+        t('data.importDoneBody', {
+          imported: r.imported,
+          skipped: r.skippedTransfers + r.skippedInvalid,
+          accounts: r.newAccounts,
+        }),
+        [{ text: t('common.ok') }],
+      );
+    } catch {
+      Alert.alert(t('data.importFailedTitle'), t('data.importFailedBody'), [
+        { text: t('common.ok') },
+      ]);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const onRefreshWidget = () => {
     DataController.refreshWidget();
     void hapticSuccess();
@@ -90,7 +123,16 @@ export function DataScreen() {
               <Text style={styles.action}>{t('data.share')}</Text>
             )}
           </Pressable>
-          <Text style={styles.cardHint}>{t('data.exportHint')}</Text>
+          <View style={styles.separator} />
+          <Pressable onPress={onImportCsv} disabled={isImporting} style={styles.row}>
+            <Text style={styles.label}>{t('data.importCsv')}</Text>
+            {isImporting ? (
+              <ActivityIndicator color={palette.dim2} />
+            ) : (
+              <Text style={styles.action}>{t('data.choose')}</Text>
+            )}
+          </Pressable>
+          <Text style={styles.cardHint}>{t('data.importHint')}</Text>
         </View>
 
         <Text style={styles.section}>{t('data.dataSection')}</Text>

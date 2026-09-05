@@ -8,7 +8,7 @@
 
 import type { Account, Category, CurrencyCode, Transaction, TransactionKind } from '@models';
 
-import { convertToBase, formatMoneyPlain } from './money';
+import { convertToBase, formatMoneyPlain, parseAmountToMinor, parseRateToE6 } from './money';
 
 /** UTF-8 byte-order mark — makes Excel open a UTF-8 CSV with correct Cyrillic. */
 export const CSV_BOM = '﻿';
@@ -104,4 +104,167 @@ export function buildTransactionsCsv(input: BuildCsvInput): string {
   }
 
   return serializeCsv(rows);
+}
+
+// --- Import (round-trips our own export) -----------------------------------
+
+/**
+ * Parses an RFC 4180 CSV string into a matrix of fields. Handles a leading BOM,
+ * quoted fields (with doubled `""` escapes), and CRLF or LF line breaks. A
+ * trailing newline does not produce an empty final row.
+ */
+export function parseCsv(text: string): string[][] {
+  const s = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+  const rows: string[][] = [];
+  let field = '';
+  let row: string[] = [];
+  let inQuotes = false;
+  let sawField = false; // did the current row have any content?
+
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (s[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+      sawField = true;
+    } else if (c === ',') {
+      row.push(field);
+      field = '';
+      sawField = true;
+    } else if (c === '\n' || c === '\r') {
+      if (c === '\r' && s[i + 1] === '\n') i++; // consume CRLF as one break
+      if (sawField || field !== '') {
+        row.push(field);
+        rows.push(row);
+      }
+      field = '';
+      row = [];
+      sawField = false;
+    } else {
+      field += c;
+      sawField = true;
+    }
+  }
+  if (sawField || field !== '') {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows;
+}
+
+/** One expense/income row reconstructed from an exported CSV. */
+export interface ImportedTxRow {
+  localDay: string;
+  /** 'HH:MM' local time (falls back to '12:00' when absent). */
+  time: string;
+  accountName: string;
+  categoryName: string;
+  /** Signed minor units of `currency` (expense negative, income positive). */
+  amountMinor: number;
+  currency: string;
+  rateToBaseE6: number;
+  note: string;
+  kind: 'expense' | 'income';
+}
+
+export interface ParseImportResult {
+  rows: ImportedTxRow[];
+  /** Transfer rows are skipped (two-leg pairs can't be reconstructed from CSV). */
+  skippedTransfers: number;
+  /** Rows dropped as malformed (bad amount/currency/column count). */
+  skippedInvalid: number;
+}
+
+const COL = {
+  date: 0,
+  time: 1,
+  type: 2,
+  account: 3,
+  category: 4,
+  amount: 5,
+  currency: 6,
+  rate: 9,
+  note: 10,
+} as const;
+
+/**
+ * Interprets the matrix from {@link parseCsv} as our transactions export. Maps
+ * columns by POSITION (headers are localized, so their text can't be keyed on)
+ * and reconstructs each row's signed minor amount and frozen `rateToBaseE6`,
+ * preserving history (rule 2). `kindLabelMap` maps lower-cased type labels (both
+ * locales) to a kind so transfers are recognised and skipped; when a label is
+ * unknown, the kind falls back to the amount's sign. Resolving account/category
+ * names to ids happens in the controller (it needs the DB).
+ */
+export function parseTransactionsCsv(
+  text: string,
+  kindLabelMap: Record<string, TransactionKind>,
+): ParseImportResult {
+  const matrix = parseCsv(text);
+  const rows: ImportedTxRow[] = [];
+  let skippedTransfers = 0;
+  let skippedInvalid = 0;
+
+  // Drop the header row (first row) — it always exists in our export.
+  for (let r = 1; r < matrix.length; r++) {
+    const cells = matrix[r];
+    if (!cells || cells.length < COL.currency + 1) {
+      skippedInvalid++;
+      continue;
+    }
+    const currency = (cells[COL.currency] ?? '').trim().toUpperCase();
+    const amountRaw = (cells[COL.amount] ?? '').trim();
+    if (!currency || !amountRaw) {
+      skippedInvalid++;
+      continue;
+    }
+
+    const negative = amountRaw.startsWith('-');
+    const magnitude = parseAmountToMinor(negative ? amountRaw.slice(1) : amountRaw, currency);
+    if (magnitude === null) {
+      skippedInvalid++;
+      continue;
+    }
+    const amountMinor = negative ? -magnitude : magnitude;
+
+    const typeLabel = (cells[COL.type] ?? '').trim().toLowerCase();
+    const labelledKind = kindLabelMap[typeLabel];
+    if (labelledKind === 'transfer') {
+      skippedTransfers++;
+      continue;
+    }
+    const kind: 'expense' | 'income' =
+      labelledKind === 'income' || labelledKind === 'expense'
+        ? labelledKind
+        : amountMinor >= 0
+          ? 'income'
+          : 'expense';
+
+    const rateToBaseE6 = parseRateToE6((cells[COL.rate] ?? '').trim()) ?? 1_000_000;
+    const timeRaw = (cells[COL.time] ?? '').trim();
+
+    rows.push({
+      localDay: (cells[COL.date] ?? '').trim(),
+      time: /^\d{1,2}:\d{2}$/.test(timeRaw) ? timeRaw : '12:00',
+      accountName: (cells[COL.account] ?? '').trim(),
+      categoryName: (cells[COL.category] ?? '').trim(),
+      amountMinor,
+      currency,
+      rateToBaseE6,
+      note: cells[COL.note] ?? '',
+      kind,
+    });
+  }
+
+  return { rows, skippedTransfers, skippedInvalid };
 }

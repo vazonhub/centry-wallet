@@ -130,4 +130,53 @@ export const PaletteDark: Palette = {
   scrim: 'rgba(0,0,0,0.55)',
 };
 
-export const palettes = { light: PaletteLight, dark: PaletteDark } as const;
+/**
+ * High-contrast variants, used when iOS "Increase Contrast" is on
+ * (useIncreasedContrast). Ink goes to pure black/white, semantic colours darken/
+ * brighten for WCAG contrast, and glass surfaces become near-opaque with visible
+ * borders so text no longer floats on translucency.
+ */
+export const PaletteHighContrast: Palette = {
+  ...PaletteLight,
+  ink: '#000000',
+  dim: '#3a3f47',
+  dim2: '#565c66',
+  pos: '#0a5c3a',
+  neg: '#8f1a12',
+  warn: '#7a4300',
+  accent: '#2f3aa8',
+  accentSoft: 'rgba(47,58,168,0.16)',
+  glassBg: 'rgba(255,255,255,0.94)',
+  glassBorder: 'rgba(0,0,0,0.38)',
+  glassLightBg: 'rgba(255,255,255,0.88)',
+  glassLightBorder: 'rgba(0,0,0,0.3)',
+  tabBg: 'rgba(255,255,255,0.96)',
+  tabBorder: 'rgba(0,0,0,0.38)',
+  sheetBg: '#ffffff',
+};
+
+export const PaletteDarkHighContrast: Palette = {
+  ...PaletteDark,
+  ink: '#ffffff',
+  dim: '#c9ced6',
+  dim2: '#a4abb5',
+  pos: '#5bef92',
+  neg: '#ff8a82',
+  warn: '#ffd070',
+  accent: '#c2cdff',
+  accentSoft: 'rgba(194,205,255,0.22)',
+  glassBg: 'rgba(255,255,255,0.16)',
+  glassBorder: 'rgba(255,255,255,0.44)',
+  glassLightBg: 'rgba(255,255,255,0.12)',
+  glassLightBorder: 'rgba(255,255,255,0.34)',
+  tabBg: 'rgba(24,27,33,0.96)',
+  tabBorder: 'rgba(255,255,255,0.44)',
+  sheetBg: 'rgba(16,18,22,1)',
+};
+
+export const palettes = {
+  light: PaletteLight,
+  dark: PaletteDark,
+  lightHighContrast: PaletteHighContrast,
+  darkHighContrast: PaletteDarkHighContrast,
+} as const;

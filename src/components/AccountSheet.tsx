@@ -15,7 +15,7 @@ import { CurrencyDropdown } from '@components/CurrencyDropdown';
 import { ACCOUNT_KIND_ICONS, type IoniconName } from '@constants/icons';
 import { TransactionsController } from '@controllers/transactions.controller';
 import { usePalette } from '@hooks/usePalette';
-import type { Account } from '@models';
+import type { SpendAccountKind } from '@models';
 import { useDataStore } from '@stores/data.store';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
@@ -35,7 +35,7 @@ import {
 const E6_ONE = 1_000_000;
 
 type KindKey = 'accountSheet.kindCash' | 'accountSheet.kindCard' | 'accountSheet.kindWallet';
-const ACCOUNT_KINDS: { kind: Account['kind']; labelKey: KindKey; icon: IoniconName }[] = [
+const ACCOUNT_KINDS: { kind: SpendAccountKind; labelKey: KindKey; icon: IoniconName }[] = [
   { kind: 'cash', labelKey: 'accountSheet.kindCash', icon: ACCOUNT_KIND_ICONS.cash },
   { kind: 'card', labelKey: 'accountSheet.kindCard', icon: ACCOUNT_KIND_ICONS.card },
   { kind: 'wallet', labelKey: 'accountSheet.kindWallet', icon: ACCOUNT_KIND_ICONS.wallet },
@@ -60,7 +60,7 @@ export function AccountSheet() {
   const [currency, setCurrency] = useState(baseCurrency);
   // The account's currency when the sheet opened; a change triggers conversion.
   const [origCurrency, setOrigCurrency] = useState(baseCurrency);
-  const [kind, setKind] = useState<Account['kind']>('cash');
+  const [kind, setKind] = useState<SpendAccountKind>('cash');
   const [opening, setOpening] = useState('');
   // Editable from→to conversion rate (×1e6 text), prefilled with the market rate.
   const [rateText, setRateText] = useState('');
@@ -88,7 +88,8 @@ export function AccountSheet() {
           seedNameRef.current = { stored: account.name, display };
           setCurrency(account.currency);
           setOrigCurrency(account.currency);
-          setKind(account.kind);
+          // Goals are edited in their own sheet, never here — fall back to 'cash'.
+          setKind(account.kind === 'goal' ? 'cash' : account.kind);
           setOpening(minorToAmountInput(account.openingMinor, account.currency));
         } else {
           const base = useSettingsStore.getState().baseCurrency;

@@ -46,7 +46,8 @@
       "expo-notifications",
       "expo-sqlite",
       "@bacons/apple-targets",
-      "./plugins/withAppIntents"
+      "./plugins/withAppIntents",
+      "./plugins/withIosDeploymentTarget"
     ],
     "experiments": {
       "typedRoutes": true

@@ -1,31 +1,39 @@
 import { create } from 'zustand';
 
 import type { Transaction } from '@models';
-import { monthNom, monthPrefix, todayLocalDay } from '@utils/date';
+import { monthNom, todayLocalDay } from '@utils/date';
+import { monthRange, type DateRange } from '@utils/range';
 
 export interface TopCategory {
   categoryId: string | null;
   totalMinor: number;
 }
 
-/** State for the History tab — the currently viewed month and its aggregates. */
+/** How the History period is chosen: a calendar month, a Mon–Sun week, or a free range. */
+export type PeriodMode = 'month' | 'week' | 'custom';
+
+/** State for the History tab — the currently viewed period and its aggregates. */
 interface HistoryState {
-  month: string; // 'YYYY-MM'
-  /** 'YYYY-MM' of the earliest data, or null when there is none. */
-  earliestMonth: string | null;
+  /** Which navigation unit is active (drives the top bar + arrows). */
+  mode: PeriodMode;
+  /** The inclusive local-day range currently shown (every query keys off this). */
+  range: DateRange;
+  /** 'YYYY-MM-DD' of the earliest data, or null when there is none (clamps nav). */
+  earliestDay: string | null;
   transactions: Transaction[];
   incomeBaseMinor: number;
   outcomeBaseMinor: number;
   topCategories: TopCategory[];
-  /** True while a month is being loaded — drives the skeleton on first open. */
+  /** True while a period is being loaded — drives the skeleton on first open. */
   loading: boolean;
-  setMonth(month: string): void;
+  setMode(mode: PeriodMode): void;
+  setRange(range: DateRange): void;
   setLoading(loading: boolean): void;
   setSnapshot(
     s: Partial<
       Pick<
         HistoryState,
-        'transactions' | 'incomeBaseMinor' | 'outcomeBaseMinor' | 'topCategories' | 'earliestMonth'
+        'transactions' | 'incomeBaseMinor' | 'outcomeBaseMinor' | 'topCategories' | 'earliestDay'
       >
     >,
   ): void;
@@ -35,14 +43,16 @@ const EMPTY_TX: Transaction[] = [];
 const EMPTY_TOP: TopCategory[] = [];
 
 export const useHistoryStore = create<HistoryState>((set) => ({
-  month: monthPrefix(todayLocalDay()),
-  earliestMonth: null,
+  mode: 'month',
+  range: monthRange(todayLocalDay()),
+  earliestDay: null,
   transactions: EMPTY_TX,
   incomeBaseMinor: 0,
   outcomeBaseMinor: 0,
   topCategories: EMPTY_TOP,
   loading: true,
-  setMonth: (month) => set({ month }),
+  setMode: (mode) => set({ mode }),
+  setRange: (range) => set({ range }),
   setLoading: (loading) => set({ loading }),
   // A completed load always clears the loading flag.
   setSnapshot: (s) => set({ ...s, loading: false }),

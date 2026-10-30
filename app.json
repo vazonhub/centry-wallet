@@ -10,7 +10,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "by.vazon.centry",
-      "buildNumber": "9",
+      "buildNumber": "10",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "CFBundleLocalizations": ["en", "ru"],
@@ -46,7 +46,9 @@
       "expo-notifications",
       "expo-sqlite",
       "@bacons/apple-targets",
-      "./plugins/withAppIntents"
+      "./plugins/withAppIntents",
+      "./plugins/withIosDeploymentTarget",
+      "./plugins/withSceneDelegate"
     ],
     "experiments": {
       "typedRoutes": true

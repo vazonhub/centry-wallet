@@ -15,6 +15,7 @@ import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanim
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect } from 'expo-router';
 import { FlashList } from '@shopify/flash-list';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { AppIcon } from '@components/AppIcon';
 import { GlassButton } from '@components/GlassButton';
@@ -29,15 +30,23 @@ import { useReduceMotion } from '@hooks/useAccessibility';
 import { usePalette } from '@hooks/usePalette';
 import type { Category, Transaction } from '@models';
 import { useDataStore } from '@stores/data.store';
-import { formatMonth, shiftMonth, useHistoryStore } from '@stores/history.store';
+import { formatMonth, type PeriodMode, shiftMonth, useHistoryStore } from '@stores/history.store';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
 import { numberTextStyle, Radius, Spacing, TAB_BAR_HEIGHT, textProps, Typography } from '@theme';
 import { hexToRgba } from '@utils/color';
 import { displayAccountName, displayCategoryName } from '@utils/displayName';
-import { monthPrefix, todayLocalDay } from '@utils/date';
+import { formatDayRange, monthPrefix, todayLocalDay } from '@utils/date';
 import { hapticLight } from '@utils/haptics';
 import { convertToBase } from '@utils/money';
+import {
+  addDays,
+  type DateRange,
+  formatLocalDay,
+  monthRange,
+  parseLocalDay,
+  weekRange,
+} from '@utils/range';
 import { matchesSearch } from '@utils/search';
 
 type Filter = 'all' | 'expense' | 'income' | string; // string = accountId
@@ -72,9 +81,11 @@ export function HistoryScreen() {
     [t],
   );
 
-  const month = useHistoryStore((s) => s.month);
-  const setMonth = useHistoryStore((s) => s.setMonth);
-  const earliestMonth = useHistoryStore((s) => s.earliestMonth);
+  const mode = useHistoryStore((s) => s.mode);
+  const setMode = useHistoryStore((s) => s.setMode);
+  const range = useHistoryStore((s) => s.range);
+  const setRange = useHistoryStore((s) => s.setRange);
+  const earliestDay = useHistoryStore((s) => s.earliestDay);
   const transactions = useHistoryStore((s) => s.transactions);
   const income = useHistoryStore((s) => s.incomeBaseMinor);
   const outcome = useHistoryStore((s) => s.outcomeBaseMinor);
@@ -84,6 +95,13 @@ export function HistoryScreen() {
   const accounts = useDataStore((s) => s.accounts);
   const categories = useDataStore((s) => s.categories);
   const base = useSettingsStore((s) => s.baseCurrency);
+
+  // Period bounds derived from the clock and the earliest data — used to clamp
+  // navigation (no future periods, nothing before the first recorded day).
+  const currentDay = todayLocalDay();
+  const currentMonth = monthPrefix(currentDay);
+  const earliestMonth = earliestDay ? earliestDay.slice(0, 7) : currentMonth;
+  const startMonth = monthPrefix(range.start);
 
   const categoryById = useMemo(
     () => Object.fromEntries(categories.map((c) => [c.id, c])) as Record<string, Category>,
@@ -120,17 +138,17 @@ export function HistoryScreen() {
   const [activeRow, setActiveRow] = useState<string | null>(null);
   // Month/year picker opened by tapping the month title.
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerYear, setPickerYear] = useState(() => parseInt(month.slice(0, 4), 10));
+  const [pickerYear, setPickerYear] = useState(() => parseInt(range.start.slice(0, 4), 10));
 
-  // Reload the visible month whenever it changes or the screen refocuses
+  // Reload the visible period whenever it changes or the screen refocuses
   // (data may have changed via the input sheet).
   useEffect(() => {
-    void HistoryController.loadMonth(month);
-  }, [month]);
+    void HistoryController.loadRange(range);
+  }, [range]);
   useFocusEffect(
     useCallback(() => {
-      void HistoryController.loadMonth(month);
-    }, [month]),
+      void HistoryController.loadRange(range);
+    }, [range]),
   );
 
   const filtered = useMemo(() => {
@@ -220,19 +238,37 @@ export function HistoryScreen() {
     return () => clearTimeout(id);
   }, [activeSeg]);
 
-  const clearTips = useCallback(() => {
+  const clearTips = () => {
     setActiveSeg(null);
     setActiveRow(null);
-  }, []);
+  };
 
-  // Month change clears any open tooltip (the bars belong to the old month).
-  const goMonth = useCallback(
-    (m: string) => {
-      clearTips();
-      setMonth(m);
-    },
-    [clearTips, setMonth],
-  );
+  // Period change clears any open tooltip (the bars belong to the old period).
+  const goRange = (r: DateRange) => {
+    clearTips();
+    setRange(r);
+  };
+
+  // Switch the navigation unit, re-deriving a sensible range from the current one.
+  const switchMode = (next: PeriodMode) => {
+    hapticLight();
+    if (next === mode) return;
+    clearTips();
+    setMode(next);
+    if (next === 'month') {
+      setRange(monthRange(startMonth));
+    } else if (next === 'week') {
+      // Anchor on today when it's in view, else on the current range's start.
+      const anchor =
+        range.start <= currentDay && currentDay <= range.end ? currentDay : range.start;
+      setRange(weekRange(anchor));
+    } else {
+      // Custom: keep the window, clamped so its end never sits in the future.
+      const end = range.end > currentDay ? currentDay : range.end;
+      const start = range.start > end ? end : range.start;
+      setRange({ start, end });
+    }
+  };
 
   // The list content vs. viewport heights — used to gate the collapse so it can
   // never enter a feedback loop when there is barely anything to scroll.
@@ -259,23 +295,40 @@ export function HistoryScreen() {
     }
   };
 
-  // Clamp navigation: no future months, and no earlier than the first data month.
-  const currentMonth = monthPrefix(todayLocalDay());
-  const canNext = month < currentMonth;
-  const canPrev = earliestMonth ? month > earliestMonth : false;
+  // Clamp navigation: no future periods, nothing before the first recorded day.
+  // Custom mode navigates via its date fields, so the arrows are disabled.
+  const canPrev =
+    mode === 'month'
+      ? startMonth > earliestMonth
+      : mode === 'week'
+        ? earliestDay != null && range.start > earliestDay
+        : false;
+  const canNext =
+    mode === 'month' ? startMonth < currentMonth : mode === 'week' ? range.end < currentDay : false;
+
+  const goPrev = () => {
+    if (!canPrev) return;
+    if (mode === 'month') goRange(monthRange(shiftMonth(startMonth, -1)));
+    else if (mode === 'week') goRange(weekRange(addDays(range.start, -7)));
+  };
+  const goNext = () => {
+    if (!canNext) return;
+    if (mode === 'month') goRange(monthRange(shiftMonth(startMonth, 1)));
+    else if (mode === 'week') goRange(weekRange(addDays(range.start, 7)));
+  };
 
   // Month/year picker bounds — same range as the arrows: [earliest data, now].
-  const minMonth = earliestMonth ?? currentMonth;
+  const minMonth = earliestMonth;
   const minYear = parseInt(minMonth.slice(0, 4), 10);
   const maxYear = parseInt(currentMonth.slice(0, 4), 10);
 
   const openPicker = () => {
-    setPickerYear(parseInt(month.slice(0, 4), 10));
+    setPickerYear(parseInt(startMonth.slice(0, 4), 10));
     setPickerOpen(true);
     hapticLight();
   };
   const pickMonth = (value: string) => {
-    goMonth(value);
+    goRange(monthRange(value));
     setPickerOpen(false);
     hapticLight();
   };
@@ -283,48 +336,109 @@ export function HistoryScreen() {
   const onRowPress = useCallback(
     (tx: Transaction) => {
       const sibling = tx.transferPairId ? transferToLeg.get(tx.transferPairId) : undefined;
-      openTransactionDetail(tx, () => void HistoryController.loadMonth(month), sibling);
+      openTransactionDetail(tx, () => void HistoryController.loadRange(range), sibling);
     },
-    [month, transferToLeg],
+    [range, transferToLeg],
   );
 
-  // Pinned above the scrolling list (owner: month bar fixed on scroll).
-  const MonthBar = (
+  // Title of the current period: the month name, or the day range for week/custom.
+  const periodTitle =
+    mode === 'month' ? formatMonth(startMonth) : formatDayRange(range.start, range.end);
+
+  // Pinned above the scrolling list: a mode selector (Month/Week/Range) over the
+  // period navigator. Month/week navigate with arrows; custom uses date fields.
+  const PeriodBar = (
     <View style={styles.monthBar}>
-      <View style={styles.monthNav}>
-        <GlassButton
-          round
-          onPress={() => {
-            if (canPrev) goMonth(shiftMonth(month, -1));
-          }}
-          contentStyle={styles.navBtnContent}
-          style={!canPrev && styles.navBtnDisabled}
-          accessibilityLabel={t('history.prevMonth')}
-        >
-          <AppIcon name="chevron-back" color={canPrev ? palette.ink : palette.dim2} size={22} />
-        </GlassButton>
-        <Pressable
-          onPress={openPicker}
-          style={styles.monthTitleBtn}
-          accessibilityRole="button"
-          accessibilityLabel={t('history.pickMonthYear')}
-        >
-          <Text {...textProps('title')} style={styles.monthTitle}>
-            {formatMonth(month)}
-          </Text>
-        </Pressable>
-        <GlassButton
-          round
-          onPress={() => {
-            if (canNext) goMonth(shiftMonth(month, 1));
-          }}
-          contentStyle={styles.navBtnContent}
-          style={!canNext && styles.navBtnDisabled}
-          accessibilityLabel={t('history.nextMonth')}
-        >
-          <AppIcon name="chevron-forward" color={canNext ? palette.ink : palette.dim2} size={22} />
-        </GlassButton>
+      <View style={styles.modeRow}>
+        {(
+          [
+            { id: 'month', label: t('history.modeMonth') },
+            { id: 'week', label: t('history.modeWeek') },
+            { id: 'custom', label: t('history.modeCustom') },
+          ] as { id: PeriodMode; label: string }[]
+        ).map((m) => {
+          const active = mode === m.id;
+          return (
+            <Pressable
+              key={m.id}
+              onPress={() => switchMode(m.id)}
+              style={[styles.modeChip, active && styles.modeChipActive]}
+            >
+              <Text style={[styles.modeText, active && styles.modeTextActive]}>{m.label}</Text>
+            </Pressable>
+          );
+        })}
       </View>
+
+      {mode === 'custom' ? (
+        <View style={styles.customRow}>
+          <View style={styles.customField}>
+            <Text style={styles.customLabel}>{t('history.rangeFrom')}</Text>
+            <DateTimePicker
+              value={parseLocalDay(range.start)}
+              mode="date"
+              display="compact"
+              minimumDate={earliestDay ? parseLocalDay(earliestDay) : undefined}
+              maximumDate={parseLocalDay(range.end)}
+              onChange={(_, d) => d && goRange({ start: formatLocalDay(d), end: range.end })}
+            />
+          </View>
+          <View style={styles.customField}>
+            <Text style={styles.customLabel}>{t('history.rangeTo')}</Text>
+            <DateTimePicker
+              value={parseLocalDay(range.end)}
+              mode="date"
+              display="compact"
+              minimumDate={parseLocalDay(range.start)}
+              maximumDate={parseLocalDay(currentDay)}
+              onChange={(_, d) => d && goRange({ start: range.start, end: formatLocalDay(d) })}
+            />
+          </View>
+        </View>
+      ) : (
+        <View style={styles.monthNav}>
+          <GlassButton
+            round
+            onPress={goPrev}
+            contentStyle={styles.navBtnContent}
+            style={!canPrev && styles.navBtnDisabled}
+            accessibilityLabel={t('history.prevPeriod')}
+          >
+            <AppIcon name="chevron-back" color={canPrev ? palette.ink : palette.dim2} size={22} />
+          </GlassButton>
+          {mode === 'month' ? (
+            <Pressable
+              onPress={openPicker}
+              style={styles.monthTitleBtn}
+              accessibilityRole="button"
+              accessibilityLabel={t('history.pickMonthYear')}
+            >
+              <Text {...textProps('title')} style={styles.monthTitle}>
+                {periodTitle}
+              </Text>
+            </Pressable>
+          ) : (
+            <View style={styles.monthTitleBtn}>
+              <Text {...textProps('title')} style={styles.monthTitle}>
+                {periodTitle}
+              </Text>
+            </View>
+          )}
+          <GlassButton
+            round
+            onPress={goNext}
+            contentStyle={styles.navBtnContent}
+            style={!canNext && styles.navBtnDisabled}
+            accessibilityLabel={t('history.nextPeriod')}
+          >
+            <AppIcon
+              name="chevron-forward"
+              color={canNext ? palette.ink : palette.dim2}
+              size={22}
+            />
+          </GlassButton>
+        </View>
+      )}
     </View>
   );
 
@@ -625,7 +739,7 @@ export function HistoryScreen() {
             {monthsShort.map((label, i) => {
               const value = `${pickerYear}-${String(i + 1).padStart(2, '0')}`;
               const enabled = value >= minMonth && value <= currentMonth;
-              const selected = value === month;
+              const selected = value === startMonth;
               return (
                 <Pressable
                   key={value}
@@ -654,7 +768,7 @@ export function HistoryScreen() {
   return (
     <View style={styles.canvas}>
       <SafeAreaView style={styles.safe} edges={['top']}>
-        {MonthBar}
+        {PeriodBar}
         {FixedStats}
         {/* Wrapped in a layout-animated view so, when the category block above
             collapses/expands, the list glides to its new position in sync with
@@ -681,7 +795,7 @@ export function HistoryScreen() {
                 </View>
               ) : (
                 <Text {...textProps('footnote')} style={styles.empty}>
-                  {t('history.emptyMonth')}
+                  {t('history.emptyPeriod')}
                 </Text>
               )
             }
@@ -786,6 +900,34 @@ const makeStyles = (p: Palette) =>
       gap: Spacing.sm,
       backgroundColor: p.canvasBase,
     },
+    // Period mode selector (Month / Week / Range) above the navigator.
+    modeRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: Spacing.sm,
+      marginBottom: Spacing.sm,
+    },
+    modeChip: {
+      paddingHorizontal: Spacing.lg,
+      paddingVertical: Spacing.xs,
+      borderRadius: Radius.pill,
+      backgroundColor: p.glassLightBg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: p.glassLightBorder,
+    },
+    modeChipActive: { backgroundColor: p.btnBg, borderColor: p.btnBg },
+    modeText: { color: p.ink, fontSize: Typography.footnote.fontSize },
+    modeTextActive: { color: p.btnInk },
+    // Custom-range date fields (replace the arrow navigator in custom mode).
+    customRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexWrap: 'wrap',
+      gap: Spacing.lg,
+    },
+    customField: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    customLabel: { color: p.dim, fontSize: Typography.footnote.fontSize },
     monthNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     navBtn: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.xs },
     navArrow: { color: p.ink, fontSize: 28, fontWeight: '400' },

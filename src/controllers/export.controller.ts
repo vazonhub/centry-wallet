@@ -5,18 +5,22 @@ import { useSettingsStore } from '@stores/settings.store';
 import { buildTransactionsCsv } from '@utils/csv';
 import { currentTzOffsetMin, todayLocalDay } from '@utils/date';
 import { displayAccountName, displayCategoryName } from '@utils/displayName';
+import type { DateRange } from '@utils/range';
 
 export type ExportCsvStatus = 'shared' | 'unavailable' | 'empty';
 
 /**
- * Builds the full transactions CSV and opens the share sheet. Reads every
+ * Builds the transactions CSV and opens the share sheet. Reads every
  * account/category (including archived/deleted) so historic rows keep their
- * names, and every non-deleted transaction. 'empty' when there is nothing to
- * export — the view surfaces a message instead of an empty file.
+ * names. `range`, when given, limits the export to that inclusive local-day
+ * window (otherwise every non-deleted transaction is exported). 'empty' when
+ * nothing matches — the view surfaces a message instead of an empty file.
  */
-async function exportTransactionsCsv(): Promise<ExportCsvStatus> {
+async function exportTransactionsCsv(range?: DateRange): Promise<ExportCsvStatus> {
   const [transactions, accounts, categories] = await Promise.all([
-    TransactionsRepo.listAllTransactions(),
+    range
+      ? TransactionsRepo.listTransactionsByRange(range.start, range.end)
+      : TransactionsRepo.listAllTransactions(),
     AccountsRepo.listAccounts(true),
     CategoriesRepo.listCategories(true),
   ]);
@@ -51,7 +55,10 @@ async function exportTransactionsCsv(): Promise<ExportCsvStatus> {
     resolveCategoryName: displayCategoryName,
   });
 
-  return writeAndShareCsv(`centry-${todayLocalDay()}.csv`, csv);
+  const filename = range
+    ? `centry-${range.start}_${range.end}.csv`
+    : `centry-${todayLocalDay()}.csv`;
+  return writeAndShareCsv(filename, csv);
 }
 
 export const ExportController = { exportTransactionsCsv };

@@ -96,14 +96,17 @@ export async function listAllTransactions(): Promise<Transaction[]> {
   return rows.map(mapRow);
 }
 
-/** Transactions for a month, `monthPrefix` = 'YYYY-MM' (matched against local_day). */
-export async function listTransactionsByMonth(monthPrefix: string): Promise<Transaction[]> {
+/**
+ * Transactions within an inclusive local-day range (newest first). `start`/`end`
+ * are 'YYYY-MM-DD'; the lexicographic compare on `local_day` rides `idx_tx_day`.
+ */
+export async function listTransactionsByRange(start: string, end: string): Promise<Transaction[]> {
   const db = getDb();
   const rows = await db.getAllAsync<TransactionRow>(
     `SELECT * FROM transactions
-     WHERE deleted_at IS NULL AND local_day LIKE ? || '%'
+     WHERE deleted_at IS NULL AND local_day >= ? AND local_day <= ?
      ORDER BY local_day DESC, occurred_at DESC;`,
-    [monthPrefix],
+    [start, end],
   );
   return rows.map(mapRow);
 }
@@ -289,13 +292,13 @@ export async function softDeleteTransferPair(pairId: Id, deletedAt: number): Pro
 // the canonical half-up rounding lives in @utils/money and is applied per
 // transaction at write time.
 
-/** 'YYYY-MM' of the earliest non-deleted transaction, or null if there are none. */
-export async function earliestMonth(): Promise<string | null> {
+/** 'YYYY-MM-DD' of the earliest non-deleted transaction, or null if there are none. */
+export async function earliestDay(): Promise<string | null> {
   const db = getDb();
-  const row = await db.getFirstAsync<{ m: string | null }>(
-    `SELECT substr(MIN(local_day), 1, 7) AS m FROM transactions WHERE deleted_at IS NULL;`,
+  const row = await db.getFirstAsync<{ d: string | null }>(
+    `SELECT MIN(local_day) AS d FROM transactions WHERE deleted_at IS NULL;`,
   );
-  return row?.m ?? null;
+  return row?.d ?? null;
 }
 
 /** Distinct currencies used by non-deleted transactions. */
@@ -338,9 +341,10 @@ export async function accountBalanceMinor(accountId: Id): Promise<number> {
   return row?.balance_minor ?? 0;
 }
 
-/** Month income/outcome totals in the base currency (minor units). */
-export async function monthTotalsBaseMinor(
-  monthPrefix: string,
+/** Income/outcome totals for a local-day range in the base currency (minor units). */
+export async function rangeTotalsBaseMinor(
+  start: string,
+  end: string,
 ): Promise<{ income: number; outcome: number }> {
   const db = getDb();
   const row = await db.getFirstAsync<{ income: number | null; outcome: number | null }>(
@@ -348,8 +352,8 @@ export async function monthTotalsBaseMinor(
        SUM(CASE WHEN amount_minor > 0 THEN  amount_minor * rate_to_base_e6 / 1000000 ELSE 0 END) AS income,
        SUM(CASE WHEN amount_minor < 0 THEN -amount_minor * rate_to_base_e6 / 1000000 ELSE 0 END) AS outcome
      FROM transactions
-     WHERE deleted_at IS NULL AND kind != 'transfer' AND local_day LIKE ? || '%';`,
-    [monthPrefix],
+     WHERE deleted_at IS NULL AND kind != 'transfer' AND local_day >= ? AND local_day <= ?;`,
+    [start, end],
   );
   return { income: row?.income ?? 0, outcome: row?.outcome ?? 0 };
 }
@@ -471,18 +475,20 @@ export async function flowTxSince(
   }));
 }
 
-/** Top expense categories for a month (base minor units), descending. */
-export async function topCategoriesBaseMinor(
-  monthPrefix: string,
+/** Top expense categories for a local-day range (base minor units), descending. */
+export async function topCategoriesByRange(
+  start: string,
+  end: string,
   limit = 5,
 ): Promise<{ categoryId: string | null; totalMinor: number }[]> {
   const db = getDb();
   const rows = await db.getAllAsync<{ category_id: string | null; total: number }>(
     `SELECT category_id, SUM(-amount_minor * rate_to_base_e6 / 1000000) AS total
      FROM transactions
-     WHERE deleted_at IS NULL AND kind != 'transfer' AND amount_minor < 0 AND local_day LIKE ? || '%'
+     WHERE deleted_at IS NULL AND kind != 'transfer' AND amount_minor < 0
+       AND local_day >= ? AND local_day <= ?
      GROUP BY category_id ORDER BY total DESC LIMIT ?;`,
-    [monthPrefix, limit],
+    [start, end, limit],
   );
   return rows.map((r) => ({ categoryId: r.category_id, totalMinor: r.total }));
 }

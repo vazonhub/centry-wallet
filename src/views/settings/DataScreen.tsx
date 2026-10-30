@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { ScreenHeader } from '@components/ScreenHeader';
 import { DataController } from '@controllers/data.controller';
@@ -18,7 +19,11 @@ import { ImportController } from '@controllers/import.controller';
 import { usePalette } from '@hooks/usePalette';
 import type { Palette } from '@theme';
 import { Radius, Spacing, TAB_BAR_HEIGHT, Typography } from '@theme';
+import { todayLocalDay } from '@utils/date';
 import { hapticSuccess } from '@utils/haptics';
+import { formatLocalDay, monthRange, parseLocalDay, weekRange, type DateRange } from '@utils/range';
+
+type ExportPeriod = 'all' | 'month' | 'week' | 'custom';
 
 export function DataScreen() {
   const palette = usePalette();
@@ -29,6 +34,37 @@ export function DataScreen() {
   const [isImporting, setIsImporting] = useState(false);
   const [widgetRefreshed, setWidgetRefreshed] = useState(false);
   const refreshedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Export period: 'all' exports everything (the previous behaviour); the rest
+  // narrow the export to an inclusive local-day range (rule 8 — by frozen day).
+  const [exportPeriod, setExportPeriod] = useState<ExportPeriod>('all');
+  const [customStart, setCustomStart] = useState<Date>(() =>
+    parseLocalDay(monthRange(todayLocalDay()).start),
+  );
+  const [customEnd, setCustomEnd] = useState<Date>(() => new Date());
+
+  const exportRange = useMemo<DateRange | undefined>(() => {
+    const today = todayLocalDay();
+    if (exportPeriod === 'month') return monthRange(today);
+    if (exportPeriod === 'week') return weekRange(today);
+    if (exportPeriod === 'custom') {
+      const a = formatLocalDay(customStart);
+      const b = formatLocalDay(customEnd);
+      return a <= b ? { start: a, end: b } : { start: b, end: a };
+    }
+    return undefined;
+  }, [exportPeriod, customStart, customEnd]);
+
+  const periods = useMemo(
+    () =>
+      [
+        { id: 'all', label: t('data.exportAll') },
+        { id: 'month', label: t('data.exportThisMonth') },
+        { id: 'week', label: t('data.exportThisWeek') },
+        { id: 'custom', label: t('data.exportCustom') },
+      ] as { id: ExportPeriod; label: string }[],
+    [t],
+  );
 
   const onDeleteAll = () => {
     Alert.alert(t('data.deleteAllTitle'), t('data.deleteAllBody'), [
@@ -45,7 +81,7 @@ export function DataScreen() {
     if (isExporting) return;
     setIsExporting(true);
     try {
-      const status = await ExportController.exportTransactionsCsv();
+      const status = await ExportController.exportTransactionsCsv(exportRange);
       if (status === 'empty') {
         Alert.alert(t('data.exportEmptyTitle'), t('data.exportEmptyBody'), [
           { text: t('common.ok') },
@@ -115,6 +151,49 @@ export function DataScreen() {
       >
         <Text style={styles.section}>{t('data.exportSection')}</Text>
         <View style={styles.card}>
+          <Text style={styles.periodLabel}>{t('data.exportPeriod')}</Text>
+          <View style={styles.periodChips}>
+            {periods.map((p) => {
+              const active = exportPeriod === p.id;
+              return (
+                <Pressable
+                  key={p.id}
+                  onPress={() => setExportPeriod(p.id)}
+                  style={[styles.periodChip, active && styles.periodChipActive]}
+                >
+                  <Text style={[styles.periodChipText, active && styles.periodChipTextActive]}>
+                    {p.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          {exportPeriod === 'custom' && (
+            <View style={styles.customRange}>
+              <View style={styles.dateField}>
+                <Text style={styles.dateLabel}>{t('data.exportFrom')}</Text>
+                <DateTimePicker
+                  value={customStart}
+                  mode="date"
+                  display="compact"
+                  maximumDate={customEnd}
+                  onChange={(_, d) => d && setCustomStart(d)}
+                />
+              </View>
+              <View style={styles.dateField}>
+                <Text style={styles.dateLabel}>{t('data.exportTo')}</Text>
+                <DateTimePicker
+                  value={customEnd}
+                  mode="date"
+                  display="compact"
+                  minimumDate={customStart}
+                  maximumDate={new Date()}
+                  onChange={(_, d) => d && setCustomEnd(d)}
+                />
+              </View>
+            </View>
+          )}
+          <View style={styles.separator} />
           <Pressable onPress={onExportCsv} disabled={isExporting} style={styles.row}>
             <Text style={styles.label}>{t('data.exportCsv')}</Text>
             {isExporting ? (
@@ -184,6 +263,33 @@ const makeStyles = (p: Palette) =>
       alignItems: 'center',
       paddingVertical: Spacing.md,
     },
+    periodLabel: {
+      color: p.dim2,
+      fontSize: Typography.caption.fontSize,
+      letterSpacing: 0.8,
+      paddingTop: Spacing.md,
+      paddingBottom: Spacing.xs,
+    },
+    periodChips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+    periodChip: {
+      paddingHorizontal: Spacing.md,
+      paddingVertical: Spacing.sm,
+      borderRadius: Radius.pill,
+      backgroundColor: p.glassLightBg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: p.glassLightBorder,
+    },
+    periodChipActive: { backgroundColor: p.btnBg, borderColor: p.btnBg },
+    periodChipText: { color: p.ink, fontSize: Typography.footnote.fontSize },
+    periodChipTextActive: { color: p.btnInk },
+    customRange: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: Spacing.lg,
+      paddingTop: Spacing.md,
+    },
+    dateField: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+    dateLabel: { color: p.dim, fontSize: Typography.footnote.fontSize },
     separator: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: p.glassBorder,

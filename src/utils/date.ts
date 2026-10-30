@@ -1,4 +1,5 @@
 import { localDay } from './money';
+import { parseLocalDay } from './range';
 
 /**
  * Impure date helpers (they read the wall clock / device timezone). The pure,
@@ -106,6 +107,19 @@ export function weekdayShort(weekday: number): string {
 /** 'понедельник' / 'Monday' full weekday name for the active locale. */
 export function weekdayFull(weekday: number): string {
   return WEEKDAYS_FULL[dateLocale][((weekday % 7) + 7) % 7] ?? '';
+}
+
+/** e.g. "4 авг" / "4 Aug" — a local day as "D <short month>" (localized). */
+export function formatDayShort(day: string): string {
+  const d = parseLocalDay(day);
+  return `${d.getDate()} ${monthGen(d.getMonth()).slice(0, 3)}`;
+}
+
+/** e.g. "4 авг – 10 авг" — an inclusive local-day range (collapses equal ends). */
+export function formatDayRange(start: string, end: string): string {
+  return start === end
+    ? formatDayShort(start)
+    : `${formatDayShort(start)} – ${formatDayShort(end)}`;
 }
 
 /** e.g. "29 августа (сб)" — a day rendered as a real date with weekday. */

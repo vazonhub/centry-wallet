@@ -52,3 +52,10 @@ export const selectAccountById =
 
 export const selectDefaultAccount = (s: DataState): Account | undefined =>
   s.accounts.find((a) => a.isDefault) ?? s.accounts[0];
+
+/** Ordinary spendable accounts (everything that is not a savings goal). */
+export const selectSpendAccounts = (s: DataState): Account[] =>
+  s.accounts.filter((a) => a.kind !== 'goal');
+
+/** Open savings goals (kind 'goal'; closed goals are archived and excluded). */
+export const selectGoals = (s: DataState): Account[] => s.accounts.filter((a) => a.kind === 'goal');

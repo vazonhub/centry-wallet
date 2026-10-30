@@ -32,6 +32,12 @@ interface SettingsState {
    * days-in-period. A standalone budget: incomes/expenses never change it.
    */
   budgetPlan: BudgetPlan;
+  /**
+   * "Целевые счета трат" — accounts whose expenses count toward "можно сегодня"
+   * and the monthly warning. `null` means all accounts (default; also auto-covers
+   * accounts added later). A list restricts spending tracking to those ids.
+   */
+  spendAccountIds: string[] | null;
   /** True once the onboarding card has been completed or skipped (B11). */
   onboardingDone: boolean;
   theme: ThemeChoice;
@@ -48,6 +54,7 @@ interface SettingsState {
 
   setBaseCurrency(c: string): void;
   setBudgetPlan(p: BudgetPlan): void;
+  setSpendAccountIds(ids: string[] | null): void;
   completeOnboarding(): void;
   setTheme(t: ThemeChoice): void;
   setLanguage(l: LanguageChoice): void;
@@ -63,6 +70,7 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       baseCurrency: DEFAULT_BASE_CURRENCY,
       budgetPlan: defaultBudgetPlan(DEFAULT_BASE_CURRENCY),
+      spendAccountIds: null,
       onboardingDone: false,
       theme: SETTINGS_DEFAULTS.theme,
       resolvedScheme: resolve(SETTINGS_DEFAULTS.theme),
@@ -75,6 +83,7 @@ export const useSettingsStore = create<SettingsState>()(
 
       setBaseCurrency: (baseCurrency) => set({ baseCurrency }),
       setBudgetPlan: (budgetPlan) => set({ budgetPlan }),
+      setSpendAccountIds: (spendAccountIds) => set({ spendAccountIds }),
       completeOnboarding: () => set({ onboardingDone: true }),
       setTheme: (theme) => {
         if (theme === 'system') {

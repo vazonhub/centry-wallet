@@ -1,10 +1,16 @@
-import { ACCOUNT_KIND_ICONS } from '@constants/icons';
+import { ACCOUNT_KIND_ICONS, GOAL_ICON } from '@constants/icons';
 import { AccountsRepo, TransactionsRepo } from '@db';
-import type { Account, Id } from '@models';
+import type { Account, Id, SpendAccountKind } from '@models';
 import { getRateForNewTransaction } from '@services/rates';
 import { useSettingsStore } from '@stores/settings.store';
 import { currentTzOffsetMin, nowSec } from '@utils/date';
-import { applyCrossRate, convertToBase, deriveRateToBaseE6, localDay } from '@utils/money';
+import {
+  applyCrossRate,
+  convertFromBase,
+  convertToBase,
+  deriveRateToBaseE6,
+  localDay,
+} from '@utils/money';
 import { buildTransaction, buildTransferPair, type TransactionDraft } from '@utils/transaction';
 import { uuid } from '@utils/uuid';
 
@@ -49,7 +55,7 @@ async function addTransaction(input: AddTransactionInput): Promise<void> {
 export interface CreateAccountInput {
   name: string;
   currency: string;
-  kind: Account['kind'];
+  kind: SpendAccountKind;
   icon?: string | null;
   openingMinor?: number;
   makeDefault?: boolean;
@@ -68,6 +74,9 @@ async function createAccount(input: CreateAccountInput): Promise<Account> {
     openingMinor: input.openingMinor ?? 0,
     sortOrder: existing.length,
     isDefault: input.makeDefault ?? existing.length === 0,
+    targetMinor: null,
+    color: null,
+    closedAt: null,
     createdAt: now,
     updatedAt: now,
     archivedAt: null,
@@ -78,9 +87,113 @@ async function createAccount(input: CreateAccountInput): Promise<Account> {
   return account;
 }
 
+export interface CreateGoalInput {
+  name: string;
+  currency: string;
+  targetMinor: number;
+  color: string | null;
+  icon?: string | null;
+}
+
+/**
+ * Creates a savings goal — a special account (kind 'goal'). It is excluded from
+ * the daily allowance and spend statistics by construction; money reaches it via
+ * a transfer (see {@link topUpGoal}). Never becomes the default account.
+ */
+async function createGoal(input: CreateGoalInput): Promise<Account> {
+  const now = nowSec();
+  const existing = await AccountsRepo.listAccounts(true);
+  const goal: Account = {
+    id: uuid(),
+    name: input.name,
+    currency: input.currency,
+    kind: 'goal',
+    icon: input.icon ?? GOAL_ICON,
+    openingMinor: 0,
+    sortOrder: existing.length,
+    isDefault: false,
+    targetMinor: input.targetMinor,
+    color: input.color,
+    closedAt: null,
+    createdAt: now,
+    updatedAt: now,
+    archivedAt: null,
+  };
+  await AccountsRepo.createAccount(goal);
+  await DataController.loadAll();
+  return goal;
+}
+
+export interface UpdateGoalInput {
+  name: string;
+  targetMinor: number;
+  color: string | null;
+  icon?: string | null;
+}
+
+/** Edits a goal's name / target / colour. */
+async function updateGoal(id: Id, input: UpdateGoalInput): Promise<void> {
+  await AccountsRepo.updateGoal(
+    id,
+    {
+      name: input.name,
+      targetMinor: input.targetMinor,
+      color: input.color,
+      icon: input.icon ?? GOAL_ICON,
+    },
+    nowSec(),
+  );
+  await DataController.loadAll();
+}
+
+/**
+ * Moves money onto a goal from a spend account — a plain transfer, so it never
+ * counts as spending. `amountMinorAbs` is in the source account's currency; the
+ * destination amount is converted at the frozen market rate (goals cross-currency
+ * like any transfer).
+ */
+async function topUpGoal(goalId: Id, fromAccountId: Id, amountMinorAbs: number): Promise<void> {
+  const [goal, from] = await Promise.all([
+    AccountsRepo.getAccount(goalId),
+    AccountsRepo.getAccount(fromAccountId),
+  ]);
+  if (!goal || !from || amountMinorAbs <= 0) return;
+  const base = useSettingsStore.getState().baseCurrency;
+  const [fromRate, toRate] = await Promise.all([
+    getRateForNewTransaction(from.currency, base),
+    getRateForNewTransaction(goal.currency, base),
+  ]);
+  // Convert the source amount into the goal's currency at the market rate — the
+  // same base round-trip the transfer sheet uses for its default amount.
+  const toAmountMinorAbs =
+    from.currency === goal.currency
+      ? amountMinorAbs
+      : convertFromBase(convertToBase(amountMinorAbs, fromRate), toRate);
+  await addTransfer({
+    fromAccountId,
+    fromCurrency: from.currency,
+    fromAmountMinorAbs: amountMinorAbs,
+    toAccountId: goalId,
+    toCurrency: goal.currency,
+    toAmountMinorAbs,
+    note: null,
+  });
+}
+
+/**
+ * Closes a goal — the saved money "burns" (we bought the thing). The goal is
+ * archived so its balance leaves the wallet total (net worth drops by the saved
+ * amount), and `closed_at` marks it completed. No expense is recorded, so it
+ * never counts as a daily spend or pollutes statistics (owner spec).
+ */
+async function closeGoal(id: Id): Promise<void> {
+  await AccountsRepo.closeGoal(id, nowSec());
+  await DataController.loadAll();
+}
+
 export interface UpdateAccountInput {
   name: string;
-  kind: Account['kind'];
+  kind: SpendAccountKind;
   /** Starting balance in the account's own currency (minor units). */
   openingMinor: number;
 }
@@ -332,6 +445,10 @@ export const TransactionsController = {
   addTransaction,
   addTransfer,
   createAccount,
+  createGoal,
+  updateGoal,
+  topUpGoal,
+  closeGoal,
   updateAccount,
   changeAccountCurrency,
   deleteAccount,

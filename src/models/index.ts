@@ -23,7 +23,16 @@ export type Id = string;
 
 // --- Accounts --------------------------------------------------------------
 
-export type AccountKind = 'card' | 'cash' | 'wallet';
+/** The spendable account kinds a user can create in the account sheet. */
+export type SpendAccountKind = 'card' | 'cash' | 'wallet';
+
+/**
+ * All account kinds. A 'goal' is a special account you save toward (a savings
+ * goal). Money reaches a goal via a transfer (never counted as spending), and a
+ * goal is always excluded from the daily allowance and spend statistics — see
+ * `resolveSpendAccountIds`.
+ */
+export type AccountKind = SpendAccountKind | 'goal';
 
 export interface Account {
   id: Id;
@@ -36,6 +45,12 @@ export interface Account {
   openingMinor: number;
   sortOrder: number;
   isDefault: boolean;
+  /** Goal target in minor units of `currency` (goals only; null otherwise). */
+  targetMinor: number | null;
+  /** Accent hex for a goal's progress ring (goals only; null otherwise). */
+  color: string | null;
+  /** When a goal was closed (achieved/purchased); null for open goals/accounts. */
+  closedAt: EpochSeconds | null;
   createdAt: EpochSeconds;
   updatedAt: EpochSeconds;
   /** Accounts are archived, not deleted. */

@@ -1,5 +1,20 @@
 import type { Account, Category, Transaction, TransactionKind } from '@models';
-import { buildTransactionsCsv, serializeCsv } from '@utils/csv';
+import {
+  buildTransactionsCsv,
+  CSV_BOM,
+  parseCsv,
+  parseTransactionsCsv,
+  serializeCsv,
+} from '@utils/csv';
+
+const KIND_LABEL_MAP: Record<string, TransactionKind> = {
+  расход: 'expense',
+  доход: 'income',
+  перевод: 'transfer',
+  expense: 'expense',
+  income: 'income',
+  transfer: 'transfer',
+};
 
 const e6 = (rate: number) => Math.round(rate * 1_000_000);
 
@@ -55,6 +70,9 @@ const account = (over: Partial<Account>): Account => ({
   openingMinor: 0,
   sortOrder: 0,
   isDefault: true,
+  targetMinor: null,
+  color: null,
+  closedAt: null,
   createdAt: 0,
   updatedAt: 0,
   archivedAt: null,
@@ -153,5 +171,61 @@ describe('buildTransactionsCsv', () => {
     const lines = csv.split('\r\n');
     expect(lines[1]).toContain('earlier');
     expect(lines[2]).toContain('later');
+  });
+});
+
+describe('parseCsv — RFC 4180 parsing', () => {
+  it('splits plain fields and CRLF rows, dropping a trailing newline', () => {
+    expect(parseCsv('a,b\r\nc,d\r\n')).toEqual([
+      ['a', 'b'],
+      ['c', 'd'],
+    ]);
+  });
+
+  it('handles a leading BOM, LF-only breaks and quoted fields with escapes', () => {
+    expect(parseCsv(`${CSV_BOM}a,"b,c"\n"say ""hi""",d`)).toEqual([
+      ['a', 'b,c'],
+      ['say "hi"', 'd'],
+    ]);
+  });
+
+  it('keeps newlines inside quoted fields', () => {
+    expect(parseCsv('"line1\nline2",x')).toEqual([['line1\nline2', 'x']]);
+  });
+});
+
+describe('parseTransactionsCsv — round-trips our export', () => {
+  it('reconstructs kind, signed amount and frozen rate; skips transfers', () => {
+    const csv =
+      CSV_BOM +
+      build([
+        tx({ id: 'a', amountMinor: -1250, currency: 'USD', rateToBaseE6: e6(3.27), note: 'кофе' }),
+        tx({ id: 'b', kind: 'income', categoryId: null, amountMinor: 5000 }),
+        tx({ id: 'c', kind: 'transfer', categoryId: null, amountMinor: -3000 }),
+      ]);
+    const { rows, skippedTransfers } = parseTransactionsCsv(csv, KIND_LABEL_MAP);
+
+    expect(skippedTransfers).toBe(1);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toMatchObject({
+      kind: 'expense',
+      amountMinor: -1250,
+      currency: 'USD',
+      rateToBaseE6: e6(3.27),
+      accountName: 'Основной',
+      categoryName: 'Еда',
+      note: 'кофе',
+      localDay: '2026-08-24',
+    });
+    expect(rows[1]).toMatchObject({ kind: 'income', amountMinor: 5000, categoryName: '' });
+  });
+
+  it('drops malformed rows and reports the count', () => {
+    // header + one good row + one row with a blank amount
+    const text =
+      'H1,H2,H3,H4,H5,H6,H7\r\n2026-01-02,10:00,Доход,Acc,,12.00,BYN\r\n2026-01-02,10:00,Доход,Acc,,,BYN';
+    const { rows, skippedInvalid } = parseTransactionsCsv(text, KIND_LABEL_MAP);
+    expect(rows).toHaveLength(1);
+    expect(skippedInvalid).toBe(1);
   });
 });

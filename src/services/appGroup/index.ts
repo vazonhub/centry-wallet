@@ -23,6 +23,7 @@ const native = requireOptionalNativeModule<CentryNative>('CentryNative');
 const STATS_KEY = 'stats';
 const ACCOUNTS_KEY = 'accounts';
 const PENDING_ADD_KEY = 'pendingAdd';
+const QUICK_ADD_QUEUE_KEY = 'quickAddQueue';
 
 /** Preformatted display strings (money is formatted by @utils/money, rule 7). */
 export interface SiriStats {
@@ -60,6 +61,36 @@ export function writeSiriAccounts(accounts: SiriAccount[]): void {
     native?.setItem(ACCOUNTS_KEY, JSON.stringify(accounts));
   } catch {
     // Best-effort.
+  }
+}
+
+/**
+ * One quick-add the interactive widget enqueued. `amountMajor` is a whole number
+ * of major units (e.g. 5, 10) interpreted in the default account's currency when
+ * the app drains it — the widget can't safely touch SQLite, so the save is
+ * deferred to the next app activation.
+ */
+export interface QuickAdd {
+  kind: 'expense' | 'income';
+  amountMajor: number;
+}
+
+/** Reads and clears the interactive-widget quick-add queue (oldest first). */
+export function consumeQuickAddQueue(): QuickAdd[] {
+  try {
+    const raw = native?.getItem(QUICK_ADD_QUEUE_KEY);
+    if (!raw) return [];
+    native?.removeItem(QUICK_ADD_QUEUE_KEY);
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (q): q is QuickAdd =>
+        !!q &&
+        typeof (q as QuickAdd).amountMajor === 'number' &&
+        ((q as QuickAdd).kind === 'expense' || (q as QuickAdd).kind === 'income'),
+    );
+  } catch {
+    return [];
   }
 }
 

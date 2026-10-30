@@ -23,6 +23,7 @@ type NavKey =
   | 'settings.navMoney'
   | 'settings.navCategories'
   | 'settings.navInput'
+  | 'settings.navAccessibility'
   | 'settings.navData'
   | 'settings.navAbout';
 const NAV: { route: string; labelKey: NavKey; icon: IconName }[] = [
@@ -38,6 +39,11 @@ const NAV: { route: string; labelKey: NavKey; icon: IconName }[] = [
     icon: 'pricetags-outline',
   },
   { route: '/(tabs)/(settings)/input', labelKey: 'settings.navInput', icon: 'create-outline' },
+  {
+    route: '/(tabs)/(settings)/accessibility',
+    labelKey: 'settings.navAccessibility',
+    icon: 'accessibility-outline',
+  },
   { route: '/(tabs)/(settings)/data', labelKey: 'settings.navData', icon: 'server-outline' },
   {
     route: '/(tabs)/(settings)/about',

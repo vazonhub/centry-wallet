@@ -60,3 +60,6 @@ export const ACCOUNT_KIND_ICONS: Record<'cash' | 'card' | 'wallet', IoniconName>
   card: 'card-outline',
   wallet: 'wallet-outline',
 };
+
+/** Default icon for a savings goal (goals are managed in their own sheet). */
+export const GOAL_ICON: IoniconName = 'flag-outline';

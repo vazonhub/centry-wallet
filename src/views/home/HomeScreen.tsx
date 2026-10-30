@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { AppIcon } from '@components/AppIcon';
 import { openAccountSheet } from '@components/accountSheetRef';
 import { DragSortList } from '@components/DragSortList';
+import { GoalsBlock } from '@components/GoalsBlock';
 import { openBudgetSheet } from '@components/budgetSheetRef';
 import { openInputSheet } from '@components/inputSheetRef';
 import { openWalletTotal } from '@components/walletTotalRef';
@@ -25,6 +26,7 @@ import { TransferAmount } from '@components/TransferAmount';
 import { openTransactionDetail } from '@components/transactionDetailRef';
 import { TransactionsController } from '@controllers/transactions.controller';
 import { EXPENSE_FALLBACK_ICON, INCOME_FALLBACK_ICON, TRANSFER_ICON } from '@constants/icons';
+import { useReduceMotion } from '@hooks/useAccessibility';
 import { usePalette } from '@hooks/usePalette';
 import type { Transaction } from '@models';
 import { useDataStore } from '@stores/data.store';
@@ -36,7 +38,7 @@ import { displayAccountName, displayCategoryName } from '@utils/displayName';
 import { hexToRgba } from '@utils/color';
 import { hapticLight } from '@utils/haptics';
 import { convertToBase, formatMoney, formatMoneyCompact } from '@utils/money';
-import { computeAllowance, totalBalanceBaseMinor } from '@utils/summary';
+import { computeAllowance, resolveSpendAccountIds, totalBalanceBaseMinor } from '@utils/summary';
 
 /** Shared font size for the top-row date and wallet-total cards (same type). */
 const TOP_ROW_FONT_SIZE = 14;
@@ -77,8 +79,12 @@ export function HomeScreen() {
   const palette = usePalette();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(palette), [palette]);
+  // Reduce Motion: collapse instantly instead of gliding.
+  const collapseDuration = useReduceMotion() ? 0 : COLLAPSE_DURATION;
 
   const accounts = useDataStore((s) => s.accounts);
+  // Goals are shown separately (GoalsBlock); the chips are spend accounts only.
+  const spendAccounts = useMemo(() => accounts.filter((a) => a.kind !== 'goal'), [accounts]);
   const balances = useDataStore((s) => s.balances);
   const rates = useDataStore((s) => s.rates);
   const recent = useDataStore((s) => s.recent);
@@ -134,43 +140,62 @@ export function HomeScreen() {
     [collapsed, recentLen],
   );
 
-  const { perDayMinor, todaySpent, carry, heroColor, configured, shortfallMinor, totalMinor } =
-    useMemo(() => {
-      const {
-        perDayMinor: budget,
-        todaySpentMinor: spent,
-        carryMinor,
-        configured: isConfigured,
-        periodBudgetMinor,
-        periodSpentMinor,
-      } = computeAllowance({
-        plan: budgetPlan,
-        recent,
-        base,
-        rates,
-        todayLocalDay: todayLocalDay(),
-        now: new Date(),
-      });
-      const usage = budget > 0 ? spent / budget : spent > 0 ? 1 : 0;
-      const color = usage < 0.8 ? palette.pos : usage < 1 ? palette.warn : palette.neg;
-      // "Денег может не хватить": what's still planned to be spent this period vs.
-      // how much money actually exists across all accounts (converted to base).
-      const remainingPlan = Math.max(0, periodBudgetMinor - periodSpentMinor);
-      const available = totalBalanceBaseMinor(accounts, balances, rates, base);
-      // The "запас" is how far ahead of pace you are — but you can't carry more
-      // than the money you actually own, so cap a positive surplus at the total
-      // balance (a deficit stays as is, it's a warning).
-      const carryShown = carryMinor > 0 ? Math.min(carryMinor, Math.max(0, available)) : carryMinor;
-      return {
-        perDayMinor: budget,
-        todaySpent: spent,
-        carry: carryShown,
-        heroColor: color,
-        configured: isConfigured,
-        shortfallMinor: isConfigured ? remainingPlan - available : 0,
-        totalMinor: available,
-      };
-    }, [budgetPlan, recent, base, rates, accounts, balances, palette]);
+  const spendAccountIds = useSettingsStore((s) => s.spendAccountIds);
+
+  const {
+    perDayMinor,
+    remainingToday,
+    todaySpent,
+    carry,
+    heroColor,
+    configured,
+    shortfallMinor,
+    totalMinor,
+  } = useMemo(() => {
+    // Accounts whose spending counts toward "можно сегодня" (целевые счета трат).
+    const spendSet = resolveSpendAccountIds(spendAccountIds, accounts);
+    const {
+      perDayMinor: budget,
+      remainingTodayMinor: remaining,
+      todaySpentMinor: spent,
+      carryMinor,
+      configured: isConfigured,
+      periodBudgetMinor,
+      periodSpentMinor,
+    } = computeAllowance({
+      plan: budgetPlan,
+      recent,
+      base,
+      rates,
+      todayLocalDay: todayLocalDay(),
+      now: new Date(),
+      spendAccountIds: spendSet,
+    });
+    // The hero now shows the real remaining amount, so colour means one thing:
+    // red once today's spend has passed the daily budget, neutral ink otherwise
+    // (green stays reserved for actual income — rule 6).
+    const color = remaining < 0 ? palette.neg : palette.ink;
+    // "Денег может не хватить": what's still planned to be spent this period vs.
+    // how much money exists on the tracked spend accounts (converted to base).
+    const remainingPlan = Math.max(0, periodBudgetMinor - periodSpentMinor);
+    const available = totalBalanceBaseMinor(accounts, balances, rates, base, spendSet);
+    // The "запас" is how far ahead of pace you are — but you can't carry more
+    // than the money you actually own, so cap a positive surplus at the tracked
+    // balance (a deficit stays as is, it's a warning).
+    const carryShown = carryMinor > 0 ? Math.min(carryMinor, Math.max(0, available)) : carryMinor;
+    // The wallet total (top-right) still counts every account, goals included.
+    const walletTotal = totalBalanceBaseMinor(accounts, balances, rates, base);
+    return {
+      perDayMinor: budget,
+      remainingToday: remaining,
+      todaySpent: spent,
+      carry: carryShown,
+      heroColor: color,
+      configured: isConfigured,
+      shortfallMinor: isConfigured ? remainingPlan - available : 0,
+      totalMinor: walletTotal,
+    };
+  }, [budgetPlan, recent, base, rates, accounts, balances, palette, spendAccountIds]);
 
   const insufficientFunds = configured && shortfallMinor > 0;
 
@@ -215,11 +240,8 @@ export function HomeScreen() {
       <SafeAreaView style={styles.safe} edges={['top']}>
         {/* Fixed top: info card + hero + accounts (only the feed scrolls). Layout-
             animated so the hero/chips collapse glides and the feed follows. */}
-        <Animated.View
-          style={styles.fixedTop}
-          layout={LinearTransition.duration(COLLAPSE_DURATION)}
-        >
-          {/* Top row: today (left) + wallet total (right, tappable) */}
+        <Animated.View style={styles.fixedTop} layout={LinearTransition.duration(collapseDuration)}>
+          {/* Top row: today (left) · goal rings (middle) · wallet total (right). */}
           <View style={styles.topRow}>
             <View style={styles.todayCard}>
               <Text
@@ -232,6 +254,7 @@ export function HomeScreen() {
                 {formatTodayCompact(dateTier)}
               </Text>
             </View>
+            <GoalsBlock />
             <Pressable
               style={styles.totalCard}
               onPress={() => {
@@ -259,7 +282,7 @@ export function HomeScreen() {
           <Pressable onPress={onHeroPress} accessibilityRole="button">
             <Animated.View
               style={[styles.hero, collapsed && styles.heroCollapsed]}
-              layout={LinearTransition.duration(COLLAPSE_DURATION)}
+              layout={LinearTransition.duration(collapseDuration)}
             >
               {collapsed ? (
                 <Animated.View
@@ -271,7 +294,7 @@ export function HomeScreen() {
                   <View style={styles.heroCompactLeft}>
                     {configured ? (
                       <Money
-                        minor={perDayMinor}
+                        minor={remainingToday}
                         currency={base}
                         compact
                         style={[styles.heroCompactNumber, { color: heroColor }]}
@@ -332,16 +355,28 @@ export function HomeScreen() {
                     )}
                   </View>
                   {configured ? (
-                    <Money
-                      minor={perDayMinor}
-                      currency={base}
-                      compact
-                      options={{ hideCode: true }}
-                      style={[styles.heroNumber, { color: heroColor }]}
-                      numberOfLines={1}
-                      adjustsFontSizeToFit
-                      minimumFontScale={0.5}
-                    />
+                    <View style={styles.heroNumberRow}>
+                      <Money
+                        minor={remainingToday}
+                        currency={base}
+                        compact
+                        options={{ hideCode: true }}
+                        style={[styles.heroNumber, { color: heroColor }]}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.5}
+                      />
+                      <Text
+                        {...textProps('footnote')}
+                        style={styles.heroBase}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.7}
+                      >
+                        {t('home.ofBase')}{' '}
+                        {formatMoneyCompact(perDayMinor, base, { hideCode: true })}
+                      </Text>
+                    </View>
                   ) : (
                     <Text style={[styles.heroNumber, { color: palette.dim }]}>—</Text>
                   )}
@@ -407,7 +442,7 @@ export function HomeScreen() {
             <DragSortList
               horizontal
               gap={Spacing.sm}
-              data={accounts}
+              data={spendAccounts}
               keyExtractor={(a) => a.id}
               onReorder={(ids) => void TransactionsController.reorderAccounts(ids)}
               onDragStateChange={setChipsDragging}
@@ -477,10 +512,7 @@ export function HomeScreen() {
         {/* Feed — floating day labels; each entry is its own category-tinted card.
             Wrapped in a layout-animated view so it glides up/down in sync with the
             header collapse instead of snapping. */}
-        <Animated.View
-          style={styles.feedWrap}
-          layout={LinearTransition.duration(COLLAPSE_DURATION)}
-        >
+        <Animated.View style={styles.feedWrap} layout={LinearTransition.duration(collapseDuration)}>
           <ScrollView
             style={styles.feedScroll}
             contentContainerStyle={styles.feedContent}
@@ -626,7 +658,8 @@ const makeStyles = (p: Palette) =>
       alignItems: 'center',
       justifyContent: 'flex-end',
       gap: Spacing.sm,
-      maxWidth: '58%',
+      // Leaves room for the goal-rings block now sitting between date and total.
+      maxWidth: '48%',
       backgroundColor: p.glassBg,
       borderColor: p.glassBorder,
       borderWidth: StyleSheet.hairlineWidth,
@@ -669,11 +702,20 @@ const makeStyles = (p: Palette) =>
       fontWeight: '700',
     },
     heroLabel: { color: p.dim, letterSpacing: Typography.micro.letterSpacing },
+    heroNumberRow: { flexDirection: 'row', alignItems: 'baseline', gap: Spacing.sm },
     heroNumber: {
       ...numberTextStyle,
       fontSize: Typography.hero.fontSize,
       fontWeight: Typography.hero.fontWeight,
       letterSpacing: Typography.hero.letterSpacing,
+      flexShrink: 1,
+    },
+    // The base daily budget, shown smaller beside the remaining number ("из 30,30").
+    heroBase: {
+      ...numberTextStyle,
+      color: p.dim,
+      flexShrink: 0,
+      fontSize: Typography.footnote.fontSize,
     },
     heroFooter: {
       flexDirection: 'row',

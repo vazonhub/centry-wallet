@@ -20,6 +20,7 @@ import {
 } from '@components/walletTotalRef';
 import { StatsController } from '@controllers/stats.controller';
 import { usePalette } from '@hooks/usePalette';
+import type { Account } from '@models';
 import { useDataStore } from '@stores/data.store';
 import { useSettingsStore } from '@stores/settings.store';
 import type { Palette } from '@theme';
@@ -61,6 +62,11 @@ export function WalletTotalSheet() {
   const balances = useDataStore((s) => s.balances);
   const rates = useDataStore((s) => s.rates);
   const base = useSettingsStore((s) => s.baseCurrency);
+
+  // Goals are listed separately below the spend accounts (both toggleable, and
+  // goal money still counts toward the total when enabled).
+  const spendAccounts = useMemo(() => accounts.filter((a) => a.kind !== 'goal'), [accounts]);
+  const goals = useMemo(() => accounts.filter((a) => a.kind === 'goal'), [accounts]);
 
   const [chart, setChart] = useState<{ kind: ChartKind; points: ChartPoint[] }>({
     kind: 'balance',
@@ -208,6 +214,49 @@ export function WalletTotalSheet() {
     [t],
   );
 
+  // Shared row for both the accounts and goals lists. Goals show their colour dot
+  // instead of an icon, so they read as a distinct series in the breakdown.
+  const renderRow = (a: Account) => {
+    const own = balances[a.id] ?? 0;
+    const inBase = convertToBase(own, rateOf(a.currency));
+    const foreign = a.currency !== base;
+    const enabled = !disabled.has(a.id);
+    const isGoal = a.kind === 'goal';
+    return (
+      <Pressable
+        key={a.id}
+        style={styles.row}
+        onPress={() => toggleAccount(a.id)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: enabled }}
+        accessibilityLabel={t('walletTotal.accountA11y', { name: displayAccountName(a) })}
+      >
+        <View style={styles.rowLeft}>
+          <View style={[styles.checkbox, enabled ? styles.checkboxOn : styles.checkboxOff]}>
+            {enabled && <AppIcon name="checkmark" color={palette.btnInk} size={13} />}
+          </View>
+          {isGoal ? (
+            <View style={[styles.goalDot, { backgroundColor: a.color ?? palette.accent }]} />
+          ) : (
+            <AppIcon
+              name={a.icon}
+              color={enabled ? palette.dim : palette.dim2}
+              size={16}
+              fallback="wallet-outline"
+            />
+          )}
+          <Text style={[styles.rowName, !enabled && styles.rowMuted]} numberOfLines={1}>
+            {displayAccountName(a)}
+          </Text>
+        </View>
+        <View style={[styles.rowRight, !enabled && styles.rowFaded]}>
+          <Money minor={own} currency={a.currency} style={styles.rowOwn} />
+          {foreign && <Money minor={inBase} currency={base} style={styles.rowBase} />}
+        </View>
+      </Pressable>
+    );
+  };
+
   const renderBackdrop = (props: BottomSheetBackdropProps) => (
     <BottomSheetBackdrop {...props} appearsOnIndex={0} disappearsOnIndex={-1} />
   );
@@ -272,43 +321,15 @@ export function WalletTotalSheet() {
         </View>
 
         <Text style={styles.sectionLabel}>{t('walletTotal.byAccounts')}</Text>
-        <View style={styles.card}>
-          {accounts.map((a) => {
-            const own = balances[a.id] ?? 0;
-            const inBase = convertToBase(own, rateOf(a.currency));
-            const foreign = a.currency !== base;
-            const enabled = !disabled.has(a.id);
-            return (
-              <Pressable
-                key={a.id}
-                style={styles.row}
-                onPress={() => toggleAccount(a.id)}
-                accessibilityRole="checkbox"
-                accessibilityState={{ checked: enabled }}
-                accessibilityLabel={t('walletTotal.accountA11y', { name: displayAccountName(a) })}
-              >
-                <View style={styles.rowLeft}>
-                  <View style={[styles.checkbox, enabled ? styles.checkboxOn : styles.checkboxOff]}>
-                    {enabled && <AppIcon name="checkmark" color={palette.btnInk} size={13} />}
-                  </View>
-                  <AppIcon
-                    name={a.icon}
-                    color={enabled ? palette.dim : palette.dim2}
-                    size={16}
-                    fallback="wallet-outline"
-                  />
-                  <Text style={[styles.rowName, !enabled && styles.rowMuted]} numberOfLines={1}>
-                    {displayAccountName(a)}
-                  </Text>
-                </View>
-                <View style={[styles.rowRight, !enabled && styles.rowFaded]}>
-                  <Money minor={own} currency={a.currency} style={styles.rowOwn} />
-                  {foreign && <Money minor={inBase} currency={base} style={styles.rowBase} />}
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
+        <View style={styles.card}>{spendAccounts.map(renderRow)}</View>
+
+        {goals.length > 0 && (
+          <>
+            <Text style={styles.sectionLabel}>{t('walletTotal.goals')}</Text>
+            <View style={styles.card}>{goals.map(renderRow)}</View>
+          </>
+        )}
+
         <Text style={styles.hint}>{t('walletTotal.hint', { base, days: CHART_DAYS })}</Text>
       </BottomSheetScrollView>
     </BottomSheetModal>
@@ -586,6 +607,7 @@ const makeStyles = (p: Palette) =>
       gap: Spacing.md,
     },
     rowLeft: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, flexShrink: 1 },
+    goalDot: { width: 14, height: 14, borderRadius: 7 },
     rowName: { color: p.ink, fontSize: Typography.body.fontSize, flexShrink: 1 },
     rowMuted: { color: p.dim2 },
     rowRight: { alignItems: 'flex-end' },

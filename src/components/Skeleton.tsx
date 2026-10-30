@@ -8,6 +8,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { useReduceMotion } from '@hooks/useAccessibility';
 import { usePalette } from '@hooks/usePalette';
 import { Radius } from '@theme';
 import { hexToRgba } from '@utils/color';
@@ -26,12 +27,19 @@ interface Props {
  */
 export function Skeleton({ width = '100%', height = 14, radius = Radius.sm, style }: Props) {
   const palette = usePalette();
+  const reduceMotion = useReduceMotion();
   const pulse = useSharedValue(0);
 
   useEffect(() => {
+    // Reduce Motion: hold a steady placeholder opacity instead of pulsing.
+    if (reduceMotion) {
+      cancelAnimation(pulse);
+      pulse.value = 0.5;
+      return;
+    }
     pulse.value = withRepeat(withTiming(1, { duration: 850 }), -1, true);
     return () => cancelAnimation(pulse);
-  }, [pulse]);
+  }, [pulse, reduceMotion]);
 
   const animStyle = useAnimatedStyle(() => ({ opacity: 0.35 + pulse.value * 0.4 }));
 

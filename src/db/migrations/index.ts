@@ -2,6 +2,7 @@ import { getDb } from '../connection';
 
 // Raw SQL is inlined as a string at build time (babel-plugin-inline-import).
 import initSql from './001_init.sql';
+import goalsSql from './002_goals.sql';
 
 interface Migration {
   version: number;
@@ -14,7 +15,10 @@ interface Migration {
  * migration — it is the foundation for every future schema change
  * (docs/DATA_MODEL.md#миграции). Add new files as `NNN_name.sql` + an entry.
  */
-const MIGRATIONS: Migration[] = [{ version: 1, name: '001_init', sql: initSql }];
+const MIGRATIONS: Migration[] = [
+  { version: 1, name: '001_init', sql: initSql },
+  { version: 2, name: '002_goals', sql: goalsSql },
+];
 
 const LATEST_VERSION = MIGRATIONS.reduce((max, m) => Math.max(max, m.version), 0);
 

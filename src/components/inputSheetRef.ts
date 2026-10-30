@@ -25,6 +25,14 @@ export interface InputPrefill {
   note?: string;
   /** Target account (Siri): preselects it so the amount uses its currency. */
   accountId?: string;
+  /** Transfer source leg — used when opening in `kind: 'transfer'`. */
+  fromAccountId?: string;
+  /**
+   * Transfer destination leg — used when opening in `kind: 'transfer'`. The
+   * goals sheet's "add money" reuses this to open a transfer straight into a
+   * goal account instead of its own top-up screen (one entry point, not two).
+   */
+  toAccountId?: string;
 }
 
 let pendingPrefill: InputPrefill | null = null;
